@@ -319,15 +319,19 @@ REVOKE EXECUTE ON FUNCTION public.seed_school_user(text, text, text, text, text)
 DO $seed$
 BEGIN
   -- You. This account can provision schools, disable modules, suspend
-  -- tenants and read across every school -- give it a real password before
-  -- anything goes live.
+  -- tenants and read across every school, so it is the most valuable
+  -- credential in the system.
+  --
+  -- Set a real password in both calls below before running this, and do not
+  -- commit the one you actually use -- this file is tracked, so anything
+  -- written here ends up in the repository history permanently.
   PERFORM public.seed_platform_user(
-    'info@airoxlab.com', 'AiroxOwner2026', 'Platform Owner', 'owner');
+    'jounabs52@gmail.com', 'CHANGE_ME_BEFORE_RUNNING', 'Owner', 'owner');
 
   -- seed_platform_user leaves an existing account's password alone, so force
   -- it to a known value. Comment this out if the account already has a
   -- password you want to keep.
-  PERFORM public.set_user_password('info@airoxlab.com', 'AiroxOwner2026');
+  PERFORM public.set_user_password('jounabs52@gmail.com', 'CHANGE_ME_BEFORE_RUNNING');
 
   -- A school on the "complete" plan (every module switched on).
   PERFORM public.seed_school('Stars High School', 'demo', 'complete', true);
