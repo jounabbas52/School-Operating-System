@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -57,8 +56,7 @@ const SAMPLE = {
   address: 'Springfield',
 }
 
-function SaveButton() {
-  const { pending } = useFormStatus()
+function SaveButton({ pending }) {
   return (
     <button type="submit" form="card-settings" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -96,7 +94,7 @@ function Toggle({ name, label, defaultChecked, onToggle }) {
 export default function CardSettingsPanel({ settings, schoolName, schoolId }) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState('school')
-  const [state, formAction] = useActionState(saveIdCardSettings, {})
+  const [state, formAction, pending] = useActionState(saveIdCardSettings, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   // Only the values the preview actually renders are mirrored into state.
@@ -131,16 +129,17 @@ export default function CardSettingsPanel({ settings, schoolName, schoolId }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-4xl"
         title="Card settings"
         description="Configure the ID card template for all students"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton />
+            <SaveButton pending={pending} />
           </>
         }
       >

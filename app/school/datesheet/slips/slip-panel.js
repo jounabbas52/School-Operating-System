@@ -1,15 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import Combobox, { Select } from '@/components/combobox'
 import { generateClassSlips, saveSlip } from '../actions'
 
-function SaveButton({ label, form }) {
-  const { pending } = useFormStatus()
+function SaveButton({ label, form, pending }) {
   return (
     <button type="submit" form={form} disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -46,10 +44,13 @@ export default function SlipPanel({ row, sheets, classes, students, trigger }) {
   // sidebar entries would hide the one people use most.
   const [mode, setMode] = useState('single')
 
-  const [single, singleAction] = useActionState(saveSlip, {})
-  const [bulk, bulkAction] = useActionState(generateClassSlips, {})
+  const [single, singleAction, singlePending] = useActionState(saveSlip, {})
+  const [bulk, bulkAction, bulkPending] = useActionState(generateClassSlips, {})
 
   const editing = Boolean(row)
+  // Two actions behind one footer button, so the pending that matters is
+  // whichever mode is showing.
+  const pending = mode === 'bulk' ? bulkPending : singlePending
   const state = mode === 'bulk' ? bulk : single
   useCloseOnSuccess(state, () => setOpen(false))
 
@@ -66,16 +67,18 @@ export default function SlipPanel({ row, sheets, classes, students, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit Slip' : 'Generate New Slip'}
         description="Create an exam admit card"
         icon="▤"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
             <SaveButton
+              pending={pending}
               form={mode === 'bulk' ? 'slip-bulk-form' : 'slip-form'}
               label={
                 editing ? 'Save changes' : mode === 'bulk' ? 'Generate for class' : 'Generate Slip'

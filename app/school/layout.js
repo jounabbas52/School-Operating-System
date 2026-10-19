@@ -11,6 +11,7 @@ import {
 import { ToastProvider } from "@/components/toast";
 import Nav from "./nav";
 import { NAV } from "./nav-items";
+import SubmitButton from '@/components/submit-button'
 
 export const metadata = { title: "School Management" };
 
@@ -22,11 +23,23 @@ function initials(name, email) {
 }
 
 export default async function SchoolLayout({ children }) {
-  const { user, schoolId, school, permissions, profile, modules, appearance, supabase } =
+  const { user, schoolId, school, permissions, pages, profile, modules, appearance, supabase } =
     await getSchoolContext();
 
   if (!user) redirect("/login");
 
+  // No redirect to /teacher from here, deliberately.
+  //
+  // There used to be one, for anybody who "looked like" a teacher. It turned
+  // the two panels into a loop: the teacher panel refuses anyone without a
+  // staff record and offers a School panel button, and this line bounced them
+  // straight back to the refusal. Somebody with real access could not reach
+  // any of it.
+  //
+  // Which panel a person starts in is decided once, at the root, from the
+  // pages they can actually open. Reaching /school directly is fine: the
+  // sidebar below is built from their own sheet, so they see what is theirs
+  // and nothing else.
   if (!schoolId) {
     return (
       <div className="flex min-h-dvh items-center justify-center px-4">
@@ -43,42 +56,47 @@ export default async function SchoolLayout({ children }) {
             has been switched off.
           </p>
           <form action={signOut} className="mt-6">
-            <button className="btn btn-ghost">Sign out</button>
+            <SubmitButton pendingLabel="Signing out…" className="btn btn-ghost">Sign out</SubmitButton>
           </form>
         </div>
       </div>
     );
   }
 
-  // Filtered on the server: a link for a module the school does not have never
-  // reaches the browser at all.
+  // Filtered on the server: a link this person may not open never reaches
+  // the browser at all.
+  //
+  // TWO GATES, AND BOTH STILL MATTER
+  //   module   what the SCHOOL has bought
+  //   page     what THIS PERSON was given, screen by screen, on their sheet
+  //
+  // The dashboard is the one page nobody has to be given: it is where every
+  // signed-in person lands, and it shows only what its own queries return.
   const enabled = new Set(modules.map((m) => m.code));
+  const mayOpen = (href) => href === '/school' || Boolean(pages.get(href)?.view);
+
   const items = NAV
-    // A top-level entry may name a permission too -- Audit Logs is a single
-    // link, not a group, and only a role holding core.audit.read should see
-    // it at all.
-    .filter(
-      (item) =>
-        enabled.has(item.module) &&
-        (!item.permission || permissions.has(item.permission)),
-    )
+    .filter((item) => enabled.has(item.module))
     .map((item) =>
       item.children
         ? {
             ...item,
             children: item.children.filter(
               (child) =>
-                (!child.module || enabled.has(child.module)) &&
-                (!child.permission || permissions.has(child.permission)),
+                (!child.module || enabled.has(child.module)) && mayOpen(child.href),
             ),
           }
         : item,
     )
-    // A group whose children were all filtered away is an empty accordion.
-    .filter((item) => !item.children || item.children.length > 0);
+    .filter((item) => (item.children ? item.children.length > 0 : mayOpen(item.href)));
 
-  const roleName =
-    profile?.profile_roles?.[0]?.roles?.display_name ?? "No role";
+  // No roles any more: the line under somebody's name says what their own
+  // sheet opens, which is the only thing there is to say.
+  const openPages = items.reduce(
+    (n, item) => n + (item.children ? item.children.length : 1),
+    0,
+  );
+  const accessLine = `${openPages} page${openPages === 1 ? "" : "s"}`;
 
   // RLS already limits this to the caller's own notifications plus school
   // broadcasts, so no extra filtering is needed here.
@@ -183,12 +201,13 @@ export default async function SchoolLayout({ children }) {
                   className="truncate text-[0.66rem]"
                   style={{ color: "var(--side-dim)" }}
                 >
-                  {roleName}
+                  {accessLine}
                 </p>
               </div>
             </div>
             <form action={signOut} className="mt-2">
-              <button
+              <SubmitButton
+                pendingLabel={null}
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[0.76rem] transition hover:bg-white/5"
                 style={{ color: "var(--side-dim)" }}
               >
@@ -208,7 +227,7 @@ export default async function SchoolLayout({ children }) {
                   />
                 </svg>
                 Logout
-              </button>
+              </SubmitButton>
             </form>
           </div>
         </aside>
@@ -249,7 +268,7 @@ export default async function SchoolLayout({ children }) {
               <UserMenu
                 name={profile?.full_name}
                 email={user.email}
-                role={roleName}
+                role={accessLine}
                 settingsHref="/school"
                 signOutAction={signOut}
               />

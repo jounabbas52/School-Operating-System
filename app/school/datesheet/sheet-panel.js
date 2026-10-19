@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { SHEET_STATUSES } from '@/lib/exam-options'
 import { saveSheet } from './actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="sheet-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -28,7 +26,7 @@ function SaveButton({ editing }) {
 
 export default function SheetPanel({ row, classes, exams, sessions, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveSheet, {})
+  const [state, formAction, pending] = useActionState(saveSheet, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -42,16 +40,17 @@ export default function SheetPanel({ row, classes, exams, sessions, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'Create New Date Sheet'}
         description="The printable page the scheduled papers appear on"
         icon="▦"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

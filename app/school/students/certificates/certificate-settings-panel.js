@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -30,8 +29,7 @@ const FIELDS = [
   { key: 'issue_date', label: 'Issue date' },
 ]
 
-function SaveButton() {
-  const { pending } = useFormStatus()
+function SaveButton({ pending }) {
   return (
     <button type="submit" form="cert-settings" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -47,7 +45,7 @@ function SaveButton() {
 
 export default function CertificateSettingsPanel({ settings, schoolName, schoolId }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveCertificateSettings, {})
+  const [state, formAction, pending] = useActionState(saveCertificateSettings, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [body, setBody] = useState(settings?.body_text ?? '')
@@ -93,16 +91,17 @@ export default function CertificateSettingsPanel({ settings, schoolName, schoolI
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-2xl"
         title="Certificate settings"
         description="Configure school details and the certificate template"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton />
+            <SaveButton pending={pending} />
           </>
         }
       >

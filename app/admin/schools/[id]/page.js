@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { StatCard, StatRow } from '@/components/ui'
+import SubmitButton from '@/components/submit-button'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
 import { Select } from '@/components/combobox'
@@ -78,7 +79,7 @@ export default async function SchoolDetail({ params }) {
       supabase.from('plans').select('code, name').order('sort_order'),
       supabase
         .from('profiles')
-        .select('id, full_name, email, status, profile_roles(roles(name, display_name))')
+        .select('id, full_name, email, status, user_access(section, can_view)')
         .eq('school_id', id)
         .order('created_at'),
     ])
@@ -174,7 +175,7 @@ export default async function SchoolDetail({ params }) {
                 options={(plans ?? []).map((p) => ({ id: p.code, label: p.name }))}
                 emptyLabel="No plans defined."
               />
-              <button className="btn btn-ghost">Apply plan</button>
+              <SubmitButton pendingLabel="Applying…" className="btn btn-ghost">Apply plan</SubmitButton>
             </form>
           </div>
         </div>
@@ -309,7 +310,8 @@ export default async function SchoolDetail({ params }) {
                           <input type="hidden" name="enable" value={on ? 'false' : 'true'} />
                           {/* A switch, not a button labelled On/Off — the
                               control should show the state, not the verb. */}
-                          <button
+                          <SubmitButton
+                            pendingLabel={null}
                             role="switch"
                             aria-checked={on}
                             aria-label={`${module.name} ${on ? 'on' : 'off'}`}
@@ -320,7 +322,7 @@ export default async function SchoolDetail({ params }) {
                               className="absolute size-3.5 rounded-full bg-white transition-all"
                               style={{ left: on ? 'calc(100% - 1.125rem)' : '0.185rem' }}
                             />
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                     </div>
@@ -356,7 +358,7 @@ export default async function SchoolDetail({ params }) {
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
-                  <th>Roles</th>
+                  <th>Access</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -370,19 +372,15 @@ export default async function SchoolDetail({ params }) {
                     </td>
                     <td>{person.email}</td>
                     <td>
-                      {person.profile_roles?.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {person.profile_roles
-                            .map((pr) => pr.roles?.display_name)
-                            .filter(Boolean)
-                            .map((r) => (
-                              <span key={r} className="pill pill-brand">
-                                {r}
-                              </span>
-                            ))}
-                        </div>
+                      {/* No roles any more -- access is per person, a line
+                          per section on their own sheet. From out here the
+                          useful summary is how much of the app they hold. */}
+                      {person.user_access?.some((a) => a.can_view) ? (
+                        <span className="pill pill-brand">
+                          {person.user_access.filter((a) => a.can_view).length} sections
+                        </span>
                       ) : (
-                        '—'
+                        <span className="pill pill-muted">no access</span>
                       )}
                     </td>
                     <td>

@@ -1,15 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { Select } from '@/components/combobox'
 import { saveSection } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="section-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -32,7 +30,7 @@ export default function SectionPanel({
   trigger,
 }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveSection, {})
+  const [state, formAction, pending] = useActionState(saveSection, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -46,15 +44,16 @@ export default function SectionPanel({
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit section ${row.name}` : 'Add new section'}
         description="Create a section for a class"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

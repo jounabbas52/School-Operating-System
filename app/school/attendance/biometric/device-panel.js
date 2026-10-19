@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
+import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { Select } from '@/components/combobox'
 import { rotateToken, saveDevice } from './actions'
 
@@ -15,8 +16,7 @@ const KINDS = [
   { id: 'other', label: 'Other' },
 ]
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="device-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -117,13 +117,20 @@ function TokenReveal({ token, serial }) {
 
 export default function DevicePanel({ row, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveDevice, {})
+  const [state, formAction, pending] = useActionState(saveDevice, {})
   const [rotateState, rotateAction] = useActionState(rotateToken, {})
 
   const editing = Boolean(row)
   // The panel deliberately stays OPEN on success when a token was minted --
   // closing it would throw away the one copy of the credential.
   const token = state?.token ?? rotateState?.token
+
+  // Editing an existing device mints no token, so there is nothing to read and
+  // the panel closes like every other one. A save that DID mint a token stays
+  // open -- see above.
+  useCloseOnSuccess(state, () => {
+    if (!state?.token) setOpen(false)
+  })
 
   return (
     <>
@@ -133,16 +140,22 @@ export default function DevicePanel({ row, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'Register a device'}
         description="A fingerprint reader, and the token its agent authenticates with"
         icon="▤"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={pending}
+              className="btn btn-ghost"
+            >
               {token ? 'Done' : 'Cancel'}
             </button>
-            {!token && <SaveButton editing={editing} />}
+            {!token && <SaveButton pending={pending} editing={editing} />}
           </>
         }
       >

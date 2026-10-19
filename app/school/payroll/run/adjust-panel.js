@@ -1,15 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { money } from '@/lib/payroll-options'
 import { adjustItem } from '../actions'
 
-function SaveButton() {
-  const { pending } = useFormStatus()
+function SaveButton({ pending }) {
   return (
     <button type="submit" form="adjust-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -30,7 +28,7 @@ function SaveButton() {
 // own with a remark.
 export default function AdjustPanel({ row, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(adjustItem, {})
+  const [state, formAction, pending] = useActionState(adjustItem, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [bonus, setBonus] = useState(0)
@@ -48,6 +46,7 @@ export default function AdjustPanel({ row, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={`Adjust — ${row.name}`}
         description="A bonus or an extra deduction for this month only"
@@ -60,10 +59,10 @@ export default function AdjustPanel({ row, trigger }) {
                 {money(net)}
               </span>
             </span>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton />
+            <SaveButton pending={pending} />
           </>
         }
       >

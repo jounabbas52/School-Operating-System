@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -17,8 +16,7 @@ const MONTHS = [
 
 const BLOOD = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="student-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -72,7 +70,7 @@ export default function StudentPanel({
   trigger,
 }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveStudent, {})
+  const [state, formAction, pending] = useActionState(saveStudent, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   // Section list is filtered by the chosen class, so a section from another
@@ -91,16 +89,17 @@ export default function StudentPanel({
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-3xl"
         title={editing ? `Edit ${fullName}` : 'Register new student'}
         description="Fill in the student details"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

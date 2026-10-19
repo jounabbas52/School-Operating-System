@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import ExportButtons from '@/components/export-buttons'
+import SubmitButton from '@/components/submit-button'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
 import {
@@ -250,14 +251,18 @@ export default async function ComplaintsPage({ searchParams }) {
                             <form action={setComplaintStatus}>
                               <input type="hidden" name="id" value={c.id} />
                               <input type="hidden" name="status" value="in_progress" />
-                              <button className="btn btn-blue !px-2.5 !py-1">Start</button>
+                              <SubmitButton pendingLabel="Starting…" className="btn btn-blue !px-2.5 !py-1">
+                                Start
+                              </SubmitButton>
                             </form>
                           )}
                           {(c.status === 'pending' || c.status === 'in_progress') && (
                             <form action={setComplaintStatus}>
                               <input type="hidden" name="id" value={c.id} />
                               <input type="hidden" name="status" value="resolved" />
-                              <button className="btn btn-primary !px-2.5 !py-1">Resolve</button>
+                              <SubmitButton pendingLabel="Resolving…" className="btn btn-primary !px-2.5 !py-1">
+                                Resolve
+                              </SubmitButton>
                             </form>
                           )}
                           <ComplaintPanel

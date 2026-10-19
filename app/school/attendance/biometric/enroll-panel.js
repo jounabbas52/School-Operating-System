@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -16,8 +15,7 @@ const FINGERS = [
   'Other',
 ]
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="enroll-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -42,7 +40,7 @@ function SaveButton({ editing }) {
 // mapping.
 export default function EnrollPanel({ row, students, staff, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveEnrollment, {})
+  const [state, formAction, pending] = useActionState(saveEnrollment, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [personType, setPersonType] = useState(row?.person_type ?? 'student')
@@ -56,16 +54,17 @@ export default function EnrollPanel({ row, students, staff, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit enrolment' : 'Enrol a person'}
         description="Map a device ID to a student or staff member"
         icon="◉"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

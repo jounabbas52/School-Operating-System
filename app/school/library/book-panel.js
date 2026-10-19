@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import { Select } from '@/components/combobox'
 import { BOOK_CATEGORIES } from '@/lib/operations-options'
 import { saveBook } from './actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="book-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -28,7 +26,7 @@ function SaveButton({ editing }) {
 
 export default function BookPanel({ row, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveBook, {})
+  const [state, formAction, pending] = useActionState(saveBook, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -41,16 +39,17 @@ export default function BookPanel({ row, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.title}` : 'Add New Book'}
         description="Register a new book to the library"
         icon="▤"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

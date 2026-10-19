@@ -1,15 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { monthLabel, runMonth } from '@/lib/payroll-options'
 import { generatePayroll } from '../actions'
 
-function RunButton({ label }) {
-  const { pending } = useFormStatus()
+function RunButton({ label, pending }) {
   return (
     <button type="submit" form="generate-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -31,7 +29,7 @@ function RunButton({ label }) {
 // the action refuses — that is what approval is for.
 export default function GeneratePanel({ year, month, missing, regenerate, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(generatePayroll, {})
+  const [state, formAction, pending] = useActionState(generatePayroll, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const period = runMonth(year, month)
@@ -44,16 +42,17 @@ export default function GeneratePanel({ year, month, missing, regenerate, trigge
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={regenerate ? 'Refresh from attendance' : 'Generate Payroll'}
         description={monthLabel(period)}
         icon="⚡"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <RunButton label={regenerate ? 'Refresh' : 'Generate'} />
+            <RunButton pending={pending} label={regenerate ? 'Refresh' : 'Generate'} />
           </>
         }
       >

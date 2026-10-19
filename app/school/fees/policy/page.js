@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import { StatCard, StatRow } from '@/components/stats'
+import SubmitButton from '@/components/submit-button'
 import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
@@ -282,9 +283,9 @@ export default async function FeePolicyPage({ searchParams }) {
                               name="status"
                               value={p.status === 'active' ? 'inactive' : 'active'}
                             />
-                            <button className="btn btn-ghost !px-2.5 !py-1">
+                            <SubmitButton className="btn btn-ghost !px-2.5 !py-1">
                               {p.status === 'active' ? 'Deactivate' : 'Activate'}
-                            </button>
+                            </SubmitButton>
                           </form>
                           <PolicyPanel
                             row={p}

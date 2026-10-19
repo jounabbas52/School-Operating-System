@@ -1,14 +1,12 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { saveAttendanceSettings } from './actions'
 
-function SaveButton() {
-  const { pending } = useFormStatus()
+function SaveButton({ pending }) {
   return (
     <button type="submit" form="rules-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -27,7 +25,7 @@ function SaveButton() {
 // who knows the school's bell — not buried in the resolver.
 export default function RulesPanel({ settings, canWrite, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveAttendanceSettings, {})
+  const [state, formAction, pending] = useActionState(saveAttendanceSettings, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [late, setLate] = useState(settings?.late_after ?? '08:00')
@@ -45,16 +43,17 @@ export default function RulesPanel({ settings, canWrite, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title="Attendance rules"
         description="What the clock on a punch means"
         icon="◷"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            {canWrite && <SaveButton />}
+            {canWrite && <SaveButton pending={pending} />}
           </>
         }
       >

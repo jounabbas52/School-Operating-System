@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import { Select } from '@/components/combobox'
 import { ROUTE_STATUSES } from '@/lib/operations-options'
 import { saveRoute } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="route-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -141,7 +139,7 @@ function Stops({ initial }) {
 
 export default function RoutePanel({ row, vehicles, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveRoute, {})
+  const [state, formAction, pending] = useActionState(saveRoute, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -154,16 +152,17 @@ export default function RoutePanel({ row, vehicles, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'Add New Route'}
         description="Create a new transport route"
         icon="⇄"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

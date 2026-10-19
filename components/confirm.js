@@ -40,6 +40,23 @@ function ConfirmSubmit({ label, danger, formEl }) {
   )
 }
 
+// Its own component for the same reason as ConfirmSubmit: useFormStatus has
+// to be read inside the form's React tree, not by the dialog's parent.
+function ConfirmCancel({ onClick }) {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="button"
+      data-cancel
+      onClick={onClick}
+      disabled={pending}
+      className="btn btn-ghost"
+    >
+      Cancel
+    </button>
+  )
+}
+
 export default function ConfirmButton({
   children,
   className = 'btn btn-danger',
@@ -151,14 +168,7 @@ export default function ConfirmButton({
               </div>
 
               <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  data-cancel
-                  onClick={() => setOpen(false)}
-                  className="btn btn-ghost"
-                >
-                  Cancel
-                </button>
+                <ConfirmCancel onClick={() => setOpen(false)} />
                 <ConfirmSubmit label={confirmLabel} danger={danger} formEl={formEl} />
               </div>
             </div>

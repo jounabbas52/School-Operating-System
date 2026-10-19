@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { EXAM_STATUS_OPTIONS } from '@/lib/exam-options'
 import { saveExam } from './actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="exam-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -54,7 +52,7 @@ function StatusPicker({ defaultValue }) {
 
 export default function ExamPanel({ row, classes, sessions, years, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveExam, {})
+  const [state, formAction, pending] = useActionState(saveExam, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -69,16 +67,17 @@ export default function ExamPanel({ row, classes, sessions, years, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'Create New Exam'}
         description="Fill in the exam information to create it"
         icon="▣"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

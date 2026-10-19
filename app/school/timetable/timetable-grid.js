@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -9,8 +8,7 @@ import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { DAY_LABEL, clock, timeRange } from '@/lib/timetable'
 import { saveSlot } from './actions'
 
-function SaveButton({ assigned }) {
-  const { pending } = useFormStatus()
+function SaveButton({ assigned, pending }) {
   return (
     <button type="submit" form="slot-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -71,7 +69,7 @@ export default function TimetableGrid({
   canWrite,
 }) {
   const [open, setOpen] = useState(null)
-  const [state, formAction] = useActionState(saveSlot, {})
+  const [state, formAction, pending] = useActionState(saveSlot, {})
   useCloseOnSuccess(state, () => setOpen(null))
 
   const entry = open ? entries[open.id] : null
@@ -204,6 +202,7 @@ export default function TimetableGrid({
 
       <SidePanel
         open={Boolean(open)}
+        busy={pending}
         onClose={() => setOpen(null)}
         width="max-w-md"
         icon="🕘"
@@ -211,10 +210,10 @@ export default function TimetableGrid({
         description={open ? timeRange(open.start_time, open.end_time) : ''}
         footer={
           <>
-            <button type="button" onClick={() => setOpen(null)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(null)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton assigned={Boolean(entry)} />
+            <SaveButton pending={pending} assigned={Boolean(entry)} />
           </>
         }
       >

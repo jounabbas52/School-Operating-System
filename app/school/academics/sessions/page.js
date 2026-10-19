@@ -3,6 +3,7 @@ import { formatDate } from '@/lib/appearance'
 import { activateSession } from '../actions'
 import SessionPanel from './session-panel'
 import ExportButtons from '@/components/export-buttons'
+import SubmitButton from '@/components/submit-button'
 import RefreshButton from '@/components/refresh-button'
 
 export const metadata = { title: 'Academic Sessions' }
@@ -151,7 +152,9 @@ export default async function SessionsPage() {
                           {!row.is_current && (
                             <form action={activateSession}>
                               <input type="hidden" name="id" value={row.id} />
-                              <button className="btn btn-ghost !px-2.5 !py-1">Set active</button>
+                              <SubmitButton pendingLabel="Setting…" className="btn btn-ghost !px-2.5 !py-1">
+                                Set active
+                              </SubmitButton>
                             </form>
                           )}
                           <SessionPanel

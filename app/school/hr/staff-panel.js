@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -15,8 +14,7 @@ import {
 } from '@/lib/staff-options'
 import { saveStaff } from './actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="staff-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -62,7 +60,7 @@ function SectionHead({ children, tone = 'var(--brand-ink)' }) {
 
 export default function StaffPanel({ row, nextStaffNumber, defaultType = 'teaching', trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveStaff, {})
+  const [state, formAction, pending] = useActionState(saveStaff, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -75,16 +73,17 @@ export default function StaffPanel({ row, nextStaffNumber, defaultType = 'teachi
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-2xl"
         title={editing ? `Edit ${staffName(row)}` : 'Add new staff member'}
         description="Fill in the details below"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

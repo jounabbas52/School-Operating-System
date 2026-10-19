@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import { Select } from '@/components/combobox'
 import { money } from '@/lib/payroll-options'
 import { applyTemplate } from '../actions'
 
-function ApplyButton({ count }) {
-  const { pending } = useFormStatus()
+function ApplyButton({ count, pending }) {
   return (
     <button
       type="submit"
@@ -35,7 +33,7 @@ function ApplyButton({ count }) {
 // getAll -- the same shape every other multi-select in this app uses.
 export default function TemplatePanel({ structures, staff, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(applyTemplate, {})
+  const [state, formAction, pending] = useActionState(applyTemplate, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [structureId, setStructureId] = useState('')
@@ -77,6 +75,7 @@ export default function TemplatePanel({ structures, staff, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title="Apply Template to Staff"
         description="Copies the template amounts onto each selected employee"
@@ -84,10 +83,10 @@ export default function TemplatePanel({ structures, staff, trigger }) {
         width="max-w-lg"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <ApplyButton count={picked.size} />
+            <ApplyButton pending={pending} count={picked.size} />
           </>
         }
       >

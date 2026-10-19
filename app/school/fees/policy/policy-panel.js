@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { ALL_MONTHS, MONTHS, POLICY_COMPONENTS, money } from '@/lib/fee-options'
 import { savePolicy } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="policy-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -120,7 +118,7 @@ function Component({ component, policy, onAmountChange }) {
 
 export default function PolicyPanel({ row, classes, sessions, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(savePolicy, {})
+  const [state, formAction, pending] = useActionState(savePolicy, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   // A running total so a clerk can see what a full month costs without adding
@@ -141,6 +139,7 @@ export default function PolicyPanel({ row, classes, sessions, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'Add Fee Policy'}
         description="Define a new fee structure for a class"
@@ -154,10 +153,10 @@ export default function PolicyPanel({ row, classes, sessions, trigger }) {
                 {money(total)}
               </span>
             </span>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

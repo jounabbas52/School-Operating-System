@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { PASSENGER_STATUSES } from '@/lib/operations-options'
 import { savePassenger } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="passenger-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -35,7 +33,7 @@ export default function PassengerPanel({
   trigger,
 }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(savePassenger, {})
+  const [state, formAction, pending] = useActionState(savePassenger, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -68,16 +66,17 @@ export default function PassengerPanel({
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${studentLabel}` : 'Add Transport Student'}
         description="Register a student for transport service"
         icon="◉"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

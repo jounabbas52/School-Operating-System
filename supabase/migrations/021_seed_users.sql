@@ -252,14 +252,26 @@ $fn$;
 
 
 -- ----------------------------------------------------------------------------
--- 4. Account + a role at one school
+-- 4. Account + an access sheet at one school
 -- ----------------------------------------------------------------------------
+-- There are no roles (023). Access is a sheet of sections belonging to one
+-- person, so this writes that sheet directly.
+--
+--   p_sections   NULL for every section, or an array like
+--                ARRAY['students','attendance'] for only those
+--   p_can_write  false seeds somebody who can look and not touch
+--   p_scope      'own' confines them to their own sections -- a teacher
+--
+-- Requires 023 to have been run, because permission_map is where the list of
+-- sections lives.
 CREATE OR REPLACE FUNCTION public.seed_school_user(
   p_email       text,
   p_password    text,
   p_full_name   text,
   p_school_slug text,
-  p_role_name   text DEFAULT 'admin'
+  p_sections    text[] DEFAULT NULL,
+  p_can_write   boolean DEFAULT true,
+  p_scope       text DEFAULT 'all'
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -269,22 +281,11 @@ AS $fn$
 DECLARE
   v_id     uuid;
   v_school uuid;
-  v_role   bigint;
+  v_count  integer;
 BEGIN
   SELECT id INTO v_school FROM public.schools WHERE slug = p_school_slug;
   IF v_school IS NULL THEN
     RAISE EXCEPTION 'no school with slug "%"', p_school_slug;
-  END IF;
-
-  -- Prefer a role the school defined itself over the shared system template.
-  SELECT id INTO v_role
-  FROM public.roles
-  WHERE name = p_role_name AND (school_id = v_school OR school_id IS NULL)
-  ORDER BY school_id NULLS LAST
-  LIMIT 1;
-
-  IF v_role IS NULL THEN
-    RAISE EXCEPTION 'no role named "%"', p_role_name;
   END IF;
 
   v_id := public.create_user_account(p_email, p_password, p_full_name);
@@ -293,11 +294,26 @@ BEGIN
      SET school_id = v_school, status = 'active', updated_at = now()
    WHERE id = v_id;
 
-  INSERT INTO public.profile_roles (school_id, profile_id, role_id)
-  VALUES (v_school, v_id, v_role)
-  ON CONFLICT (school_id, profile_id, role_id) DO NOTHING;
+  INSERT INTO public.user_access
+    (school_id, profile_id, section, can_view, can_write, can_delete, scope)
+  SELECT v_school, v_id, m.section,
+         true,
+         p_can_write,
+         -- somebody confined to their own sections does not get to delete
+         p_can_write AND p_scope = 'all',
+         CASE WHEN p_scope = 'own'
+                   AND bool_or(m.scope = 'own') THEN 'own' ELSE 'all' END
+    FROM public.permission_map m
+   WHERE p_sections IS NULL OR m.section = ANY (p_sections)
+   GROUP BY m.section
+  ON CONFLICT (school_id, profile_id, section) DO UPDATE
+    SET can_view   = true,
+        can_write  = EXCLUDED.can_write,
+        can_delete = EXCLUDED.can_delete,
+        scope      = EXCLUDED.scope;
 
-  RAISE NOTICE '% -> %/%', p_email, p_school_slug, p_role_name;
+  SELECT count(*) INTO v_count FROM public.user_access WHERE profile_id = v_id;
+  RAISE NOTICE '% -> % (% sections, scope %)', p_email, p_school_slug, v_count, p_scope;
   RETURN v_id;
 END;
 $fn$;
@@ -310,7 +326,7 @@ REVOKE EXECUTE ON FUNCTION public.create_user_account(text, text, text) FROM PUB
 REVOKE EXECUTE ON FUNCTION public.set_user_password(text, text) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.seed_platform_user(text, text, text, text) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.seed_school(text, text, text, boolean) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.seed_school_user(text, text, text, text, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.seed_school_user(text, text, text, text, text[], boolean, text) FROM PUBLIC, anon, authenticated;
 
 
 -- ============================================================================
@@ -336,14 +352,22 @@ BEGIN
   -- A school on the "complete" plan (every module switched on).
   PERFORM public.seed_school('Stars High School', 'demo', 'complete', true);
 
-  -- Its staff. Roles: admin, principal, teacher, accountant,
-  -- librarian, receptionist.
+  -- Its staff. No roles: each of these gets their own sheet of sections,
+  -- and any of them can be re-ticked afterwards in Users & Access.
+  --
+  -- Everything, including Users & Access itself.
   PERFORM public.seed_school_user(
-    'admin@demo.test',    'admin123',    'Demo Admin',      'demo', 'admin');
+    'admin@demo.test', 'admin123', 'Demo Admin', 'demo');
+
+  -- A teacher: their own sections only, and nothing outside teaching.
   PERFORM public.seed_school_user(
-    'teacher@demo.test',  'teacher123',  'Demo Teacher',    'demo', 'teacher');
+    'teacher@demo.test', 'teacher123', 'Demo Teacher', 'demo',
+    ARRAY['students', 'attendance', 'tests', 'exams'], true, 'own');
+
+  -- Money, and nothing else. Read and write, but no deletes.
   PERFORM public.seed_school_user(
-    'accounts@demo.test', 'accounts123', 'Demo Accountant', 'demo', 'accountant');
+    'accounts@demo.test', 'accounts123', 'Demo Accountant', 'demo',
+    ARRAY['fees', 'accounts', 'payroll', 'reports'], true, 'all');
 END
 $seed$;
 
@@ -356,12 +380,15 @@ SELECT
   p.full_name,
   p.status,
   COALESCE(s.school_name, '— platform —') AS school,
-  COALESCE(r.display_name, pa.role::text) AS role
+  COALESCE(pa.role::text,
+           nullif(string_agg(ua.section, ', ' ORDER BY ua.section)
+                    FILTER (WHERE ua.can_view), ''),
+           '— no access —') AS can_open
 FROM public.profiles p
-LEFT JOIN public.schools s        ON s.id = p.school_id
-LEFT JOIN public.profile_roles pr ON pr.profile_id = p.id
-LEFT JOIN public.roles r          ON r.id = pr.role_id
+LEFT JOIN public.schools s          ON s.id = p.school_id
+LEFT JOIN public.user_access ua     ON ua.profile_id = p.id
 LEFT JOIN public.platform_admins pa ON pa.user_id = p.id
+GROUP BY p.email, p.full_name, p.status, s.school_name, pa.role, p.created_at
 ORDER BY pa.role IS NULL, p.created_at;
 
 
@@ -370,7 +397,7 @@ ORDER BY pa.role IS NULL, p.created_at;
 -- ============================================================================
 -- A function that mints platform owners should not stay installed.
 --
--- DROP FUNCTION IF EXISTS public.seed_school_user(text, text, text, text, text);
+-- DROP FUNCTION IF EXISTS public.seed_school_user(text, text, text, text, text[], boolean, text);
 -- DROP FUNCTION IF EXISTS public.seed_school(text, text, text, boolean);
 -- DROP FUNCTION IF EXISTS public.seed_platform_user(text, text, text, text);
 -- DROP FUNCTION IF EXISTS public.set_user_password(text, text);

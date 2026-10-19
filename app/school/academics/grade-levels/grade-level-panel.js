@@ -1,15 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { Select } from '@/components/combobox'
 import { saveGradeLevel } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="grade-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -25,7 +23,7 @@ function SaveButton({ editing }) {
 
 export default function GradeLevelPanel({ row, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveGradeLevel, {})
+  const [state, formAction, pending] = useActionState(saveGradeLevel, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -38,15 +36,16 @@ export default function GradeLevelPanel({ row, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'Add grade level'}
         description="Permanent — the same level is reused every session."
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

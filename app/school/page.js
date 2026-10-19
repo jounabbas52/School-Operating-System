@@ -56,7 +56,7 @@ export default async function SchoolDashboard() {
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('school_id', schoolId),
     ])
 
-  const role = profile?.profile_roles?.[0]?.roles
+
   const firstName = (profile?.full_name || '').split(' ')[0]
   const today = formatLongDate(new Date(), { timezone: appearance.timezone })
 
@@ -73,8 +73,8 @@ export default async function SchoolDashboard() {
             Welcome{firstName ? `, ${firstName}` : ''}
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: 'var(--muted)' }}>
-            {school?.school_name} · {role?.display_name ?? 'no role'} · {permissions.size}{' '}
-            permissions
+            {school?.school_name} · {permissions.size} permission
+            {permissions.size === 1 ? '' : 's'} on your own access sheet
           </p>
         </div>
         <RefreshButton />

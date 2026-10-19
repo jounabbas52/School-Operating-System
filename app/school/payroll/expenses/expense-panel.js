@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -10,8 +9,7 @@ import { PAYMENT_MODES } from '@/lib/staff-options'
 import { EXPENSE_CATEGORIES } from '@/lib/payroll-options'
 import { saveExpense } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="expense-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -29,7 +27,7 @@ function SaveButton({ editing }) {
 
 export default function ExpensePanel({ row, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveExpense, {})
+  const [state, formAction, pending] = useActionState(saveExpense, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -42,6 +40,7 @@ export default function ExpensePanel({ row, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.title}` : 'New Expense'}
         description={
@@ -50,10 +49,10 @@ export default function ExpensePanel({ row, trigger }) {
         icon="▤"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

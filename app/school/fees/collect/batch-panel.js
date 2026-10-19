@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { FEE_TYPES, MONTHS, monthKey } from '@/lib/fee-options'
 import { applyLateFees, generateClassChallans, generateMonthlyBatch } from '../actions'
 
-function SubmitButton({ form, label }) {
-  const { pending } = useFormStatus()
+function SubmitButton({ form, label, pending }) {
   return (
     <button type="submit" form={form} disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -34,10 +32,14 @@ export default function BatchPanel({ classes, defaultYear, defaultMonth, trigger
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState('monthly')
 
-  const [monthly, monthlyAction] = useActionState(generateMonthlyBatch, {})
-  const [perClass, perClassAction] = useActionState(generateClassChallans, {})
-  const [late, lateAction] = useActionState(applyLateFees, {})
+  const [monthly, monthlyAction, monthlyPending] = useActionState(generateMonthlyBatch, {})
+  const [perClass, perClassAction, perClassPending] = useActionState(generateClassChallans, {})
+  const [late, lateAction, latePending] = useActionState(applyLateFees, {})
 
+  // Three actions behind one footer button -- the pending that matters is the
+  // one belonging to the mode currently on screen.
+  const pending =
+    mode === 'monthly' ? monthlyPending : mode === 'class' ? perClassPending : latePending
   const state = mode === 'monthly' ? monthly : mode === 'class' ? perClass : late
   useCloseOnSuccess(state, () => setOpen(false))
 
@@ -64,16 +66,18 @@ export default function BatchPanel({ classes, defaultYear, defaultMonth, trigger
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title="Generate Challans"
         description="Raise bills for a month, a class, or apply late fees"
         icon="▦"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
             <SubmitButton
+              pending={pending}
               form={
                 mode === 'monthly'
                   ? 'batch-monthly-form'

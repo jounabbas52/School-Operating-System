@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -10,8 +9,7 @@ import { PAYMENT_MODES } from '@/lib/staff-options'
 import { money } from '@/lib/payroll-options'
 import { saveStaffSalary } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="salary-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -67,7 +65,7 @@ function Toggle({ name, label, hint, defaultChecked }) {
 // same grade.
 export default function SalaryPanel({ staffId, staffLabel, row, structures, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveStaffSalary, {})
+  const [state, formAction, pending] = useActionState(saveStaffSalary, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [amounts, setAmounts] = useState(() =>
@@ -108,6 +106,7 @@ export default function SalaryPanel({ staffId, staffLabel, row, structures, trig
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${staffLabel}` : `Assign salary — ${staffLabel}`}
         description="What payroll actually pays this employee"
@@ -120,10 +119,10 @@ export default function SalaryPanel({ staffId, staffLabel, row, structures, trig
                 {money(net)}
               </span>
             </span>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

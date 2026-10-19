@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -9,8 +8,7 @@ import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { LEAVE_STATUSES, LEAVE_TYPES, leaveDays } from '@/lib/staff-options'
 import { saveLeave } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="leave-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -78,7 +76,7 @@ function Derived({ label, value }) {
 
 export default function LeavePanel({ row, staff, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveLeave, {})
+  const [state, formAction, pending] = useActionState(saveLeave, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -98,6 +96,7 @@ export default function LeavePanel({ row, staff, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-xl"
         icon="🗓"
@@ -105,10 +104,10 @@ export default function LeavePanel({ row, staff, trigger }) {
         description="Fill in the details to apply leave"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

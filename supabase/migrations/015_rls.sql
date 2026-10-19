@@ -1,5 +1,5 @@
 -- ============================================================================
--- RLS.sql -- EVERY ROW LEVEL SECURITY OBJECT IN ONE FILE
+-- 015_rls.sql -- EVERY ROW LEVEL SECURITY OBJECT IN ONE FILE
 -- ============================================================================
 -- Consolidated from schema.sql AND every numbered migration. The standard set
 -- covers 56 tenant tables: schema.sql declares 38 of them and the later

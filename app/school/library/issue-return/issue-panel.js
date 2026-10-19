@@ -1,15 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import Combobox from '@/components/combobox'
 import { issueBook } from '../actions'
 
-function IssueButton() {
-  const { pending } = useFormStatus()
+function IssueButton({ pending }) {
   return (
     <button type="submit" form="issue-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -29,7 +27,7 @@ const DEFAULT_LOAN_DAYS = 14
 
 export default function IssuePanel({ books, students, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(issueBook, {})
+  const [state, formAction, pending] = useActionState(issueBook, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [bookId, setBookId] = useState('')
@@ -48,16 +46,17 @@ export default function IssuePanel({ books, students, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title="Issue Book"
         description="Select book and student from the system"
         icon="▤"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <IssueButton />
+            <IssueButton pending={pending} />
           </>
         }
       >

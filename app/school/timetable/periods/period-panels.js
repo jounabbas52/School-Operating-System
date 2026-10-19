@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -17,8 +16,7 @@ import { generatePeriods, savePeriod, updateTiming } from '../actions'
 
 /* ------------------------------------------------------------- furniture */
 
-function Submit({ form, label, busyLabel = 'Saving…' }) {
-  const { pending } = useFormStatus()
+function Submit({ form, label, busyLabel = 'Saving…', pending }) {
   return (
     <button type="submit" form={form} disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -113,7 +111,7 @@ function Timeline({ slots, title, footer }) {
 
 export function SinglePeriodPanel({ row, classes, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(savePeriod, {})
+  const [state, formAction, pending] = useActionState(savePeriod, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -126,6 +124,7 @@ export function SinglePeriodPanel({ row, classes, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-md"
         icon="🕘"
@@ -133,10 +132,14 @@ export function SinglePeriodPanel({ row, classes, trigger }) {
         description="Fill in the period details"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <Submit form="single-period-form" label={editing ? 'Save changes' : 'Add period'} />
+            <Submit
+              pending={pending}
+              form="single-period-form"
+              label={editing ? 'Save changes' : 'Add period'}
+            />
           </>
         }
       >
@@ -216,7 +219,7 @@ export function SinglePeriodPanel({ row, classes, trigger }) {
 
 export function BulkPeriodsPanel({ classes, defaults, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(generatePeriods, {})
+  const [state, formAction, pending] = useActionState(generatePeriods, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const base = { ...DEFAULT_SETTINGS, ...(defaults ?? {}) }
@@ -254,6 +257,7 @@ export function BulkPeriodsPanel({ classes, defaults, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-3xl"
         icon="☰"
@@ -261,10 +265,11 @@ export function BulkPeriodsPanel({ classes, defaults, trigger }) {
         description="Auto-generate periods for multiple days"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
             <Submit
+              pending={pending}
               form="bulk-periods-form"
               label={`Add ${total} period${total === 1 ? '' : 's'}`}
               busyLabel="Generating…"
@@ -469,7 +474,7 @@ function BreakBlock({
 
 export function TimingPanel({ classes, classId, defaults, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(updateTiming, {})
+  const [state, formAction, pending] = useActionState(updateTiming, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const base = { ...DEFAULT_SETTINGS, ...(defaults ?? {}) }
@@ -494,6 +499,7 @@ export function TimingPanel({ classes, classId, defaults, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-3xl"
         icon="⚙"
@@ -501,10 +507,10 @@ export function TimingPanel({ classes, classId, defaults, trigger }) {
         description="Configure period durations and break times"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <Submit form="timing-form" label="Save settings" busyLabel="Applying…" />
+            <Submit pending={pending} form="timing-form" label="Save settings" busyLabel="Applying…" />
           </>
         }
       >

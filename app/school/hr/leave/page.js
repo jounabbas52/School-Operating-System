@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import { StatCard, StatRow } from '@/components/stats'
+import SubmitButton from '@/components/submit-button'
 import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
@@ -264,12 +265,16 @@ export default async function LeavePage({ searchParams }) {
                                 <form action={setLeaveStatus}>
                                   <input type="hidden" name="id" value={l.id} />
                                   <input type="hidden" name="status" value="approved" />
-                                  <button className="btn btn-green !px-2.5 !py-1">Approve</button>
+                                  <SubmitButton pendingLabel="Approving…" className="btn btn-green !px-2.5 !py-1">
+                                    Approve
+                                  </SubmitButton>
                                 </form>
                                 <form action={setLeaveStatus}>
                                   <input type="hidden" name="id" value={l.id} />
                                   <input type="hidden" name="status" value="rejected" />
-                                  <button className="btn btn-danger !px-2.5 !py-1">Reject</button>
+                                  <SubmitButton pendingLabel="Rejecting…" className="btn btn-danger !px-2.5 !py-1">
+                                    Reject
+                                  </SubmitButton>
                                 </form>
                               </>
                             )}

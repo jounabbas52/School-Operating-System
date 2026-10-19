@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { ADMISSION_STATES, INQUIRY_STATUSES } from '@/lib/operations-options'
 import { saveInquiry } from './actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="inquiry-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -28,7 +26,7 @@ function SaveButton({ editing }) {
 
 export default function InquiryPanel({ row, classes, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveInquiry, {})
+  const [state, formAction, pending] = useActionState(saveInquiry, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -44,16 +42,17 @@ export default function InquiryPanel({ row, classes, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit inquiry — ${row.name ?? ''}` : 'New Inquiry'}
         description="Record a new front-desk inquiry"
         icon="▤"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

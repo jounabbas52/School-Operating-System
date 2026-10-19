@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import { StatCard, StatRow } from '@/components/stats'
+import SubmitButton from '@/components/submit-button'
 import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
@@ -447,9 +448,9 @@ export default async function PayrollRunPage({ searchParams }) {
                                 name="status"
                                 value={i.status === 'hold' ? 'draft' : 'hold'}
                               />
-                              <button className="btn btn-ghost !px-2.5 !py-1">
+                              <SubmitButton className="btn btn-ghost !px-2.5 !py-1">
                                 {i.status === 'hold' ? 'Release' : 'Hold'}
-                              </button>
+                              </SubmitButton>
                             </form>
                           </>
                         )}

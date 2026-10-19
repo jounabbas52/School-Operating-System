@@ -1,14 +1,12 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { provisionSchool } from './actions'
 
-function SubmitButton() {
-  const { pending } = useFormStatus()
+function SubmitButton({ pending }) {
   return (
     <button type="submit" form="new-school-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -40,7 +38,7 @@ function slugify(value) {
 // school on success, so the panel goes away with the page.
 export default function NewSchoolPanel({ plans, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(provisionSchool, {})
+  const [state, formAction, pending] = useActionState(provisionSchool, {})
 
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
@@ -54,16 +52,17 @@ export default function NewSchoolPanel({ plans, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title="Add a school"
         description="Creates the tenant and switches on whatever its plan includes"
         icon="▦"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SubmitButton />
+            <SubmitButton pending={pending} />
           </>
         }
       >

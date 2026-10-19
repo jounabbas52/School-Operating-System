@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import { useToast } from '@/components/toast'
 import { Select } from '@/components/combobox'
@@ -9,8 +8,7 @@ import { PAYMENT_MODES } from '@/lib/staff-options'
 import { DEDUCT_FROM, WEEK_DAYS, WORKING_DAY_MODES } from '@/lib/payroll-options'
 import { savePayrollSettings } from '../actions'
 
-function SaveButton() {
-  const { pending } = useFormStatus()
+function SaveButton({ pending }) {
   return (
     <button type="submit" form="payroll-settings-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -66,7 +64,7 @@ function Card({ title, subtitle, children }) {
 }
 
 export default function SettingsForm({ settings, canWrite }) {
-  const [state, formAction] = useActionState(savePayrollSettings, {})
+  const [state, formAction, pending] = useActionState(savePayrollSettings, {})
   const { success } = useToast()
   const [seen, setSeen] = useState(null)
 
@@ -89,7 +87,7 @@ export default function SettingsForm({ settings, canWrite }) {
 
   return (
     <form id="payroll-settings-form" action={formAction} className="flex flex-col gap-4">
-      <div className="flex justify-end">{canWrite && <SaveButton />}</div>
+      <div className="flex justify-end">{canWrite && <SaveButton pending={pending} />}</div>
 
       <fieldset disabled={!canWrite} className="contents">
         <div className="grid gap-4 lg:grid-cols-2">

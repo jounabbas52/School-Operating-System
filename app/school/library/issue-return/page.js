@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import { StatCard, StatRow } from '@/components/stats'
+import SubmitButton from '@/components/submit-button'
 import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
@@ -305,7 +306,9 @@ export default async function IssueReturnPage({ searchParams }) {
                             <>
                               <form action={returnBook}>
                                 <input type="hidden" name="id" value={l.id} />
-                                <button className="btn btn-primary !px-2.5 !py-1">Return</button>
+                                <SubmitButton pendingLabel="Returning…" className="btn btn-primary !px-2.5 !py-1">
+                                  Return
+                                </SubmitButton>
                               </form>
                               {l.fine > 0 && (
                                 <form action={waiveFine}>

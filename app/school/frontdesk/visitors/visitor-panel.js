@@ -1,15 +1,13 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import Combobox from '@/components/combobox'
 import { checkInVisitor } from '../actions'
 
-function CheckInButton() {
-  const { pending } = useFormStatus()
+function CheckInButton({ pending }) {
   return (
     <button type="submit" form="visitor-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -25,7 +23,7 @@ function CheckInButton() {
 
 export default function VisitorPanel({ staff, date, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(checkInVisitor, {})
+  const [state, formAction, pending] = useActionState(checkInVisitor, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const now = new Date()
@@ -40,16 +38,17 @@ export default function VisitorPanel({ staff, date, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title="Visitor Check-In"
         description="Register a visitor for today"
         icon="◉"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <CheckInButton />
+            <CheckInButton pending={pending} />
           </>
         }
       >

@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import SidePanel from '@/components/side-panel'
 import { Select } from '@/components/combobox'
 import { Spinner } from '@/components/spinner'
@@ -9,8 +8,7 @@ import { useCloseOnSuccess } from '@/components/use-close-on-success'
 import { DOC_STATUSES, DOC_TYPES } from '@/lib/staff-options'
 import { saveDocument } from '../actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="document-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -62,7 +60,7 @@ function Group({ title, children }) {
 
 export default function DocumentPanel({ row, staff, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveDocument, {})
+  const [state, formAction, pending] = useActionState(saveDocument, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -79,6 +77,7 @@ export default function DocumentPanel({ row, staff, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         width="max-w-xl"
         icon="📄"
@@ -86,10 +85,10 @@ export default function DocumentPanel({ row, staff, trigger }) {
         description="Fill in the document information"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

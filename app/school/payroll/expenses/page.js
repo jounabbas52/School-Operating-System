@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import { StatCard, StatRow } from '@/components/stats'
+import SubmitButton from '@/components/submit-button'
 import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
@@ -277,7 +278,9 @@ export default async function ExpensesPage({ searchParams }) {
                               <form action={setExpenseStatus}>
                                 <input type="hidden" name="id" value={e.id} />
                                 <input type="hidden" name="status" value="approved" />
-                                <button className="btn btn-blue !px-2.5 !py-1">Approve</button>
+                                <SubmitButton pendingLabel="Approving…" className="btn btn-blue !px-2.5 !py-1">
+                                  Approve
+                                </SubmitButton>
                               </form>
                               <form action={setExpenseStatus}>
                                 <input type="hidden" name="id" value={e.id} />
@@ -297,7 +300,9 @@ export default async function ExpensesPage({ searchParams }) {
                             <form action={setExpenseStatus}>
                               <input type="hidden" name="id" value={e.id} />
                               <input type="hidden" name="status" value="paid" />
-                              <button className="btn btn-primary !px-2.5 !py-1">Mark paid</button>
+                              <SubmitButton pendingLabel="Saving…" className="btn btn-primary !px-2.5 !py-1">
+                                Mark paid
+                              </SubmitButton>
                             </form>
                           )}
                           <ExpensePanel

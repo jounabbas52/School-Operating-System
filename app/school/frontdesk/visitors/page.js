@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import ExportButtons from '@/components/export-buttons'
+import SubmitButton from '@/components/submit-button'
 import RefreshButton from '@/components/refresh-button'
 import ConfirmButton from '@/components/confirm'
 import { dateLabel, duration, timeLabel, todayKey } from '@/lib/operations-options'
@@ -277,7 +278,9 @@ export default async function VisitorsPage({ searchParams }) {
                             {!v.out_time && (
                               <form action={checkOutVisitor}>
                                 <input type="hidden" name="id" value={v.id} />
-                                <button className="btn btn-primary !px-2.5 !py-1">Check out</button>
+                                <SubmitButton pendingLabel="Checking out…" className="btn btn-primary !px-2.5 !py-1">
+                                  Check out
+                                </SubmitButton>
                               </form>
                             )}
                             <form action={deleteVisitor}>

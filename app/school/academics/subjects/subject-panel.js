@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -10,8 +9,7 @@ import { saveSubject } from '../actions'
 
 const CATEGORIES = ['Core', 'Science', 'Languages', 'Social Studies', 'Arts', 'Islamiat', 'Optional']
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="subject-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -27,7 +25,7 @@ function SaveButton({ editing }) {
 
 export default function SubjectPanel({ row, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveSubject, {})
+  const [state, formAction, pending] = useActionState(saveSubject, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
@@ -40,15 +38,16 @@ export default function SubjectPanel({ row, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'Add subject'}
         description="Subjects are defined once, then picked per section."
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

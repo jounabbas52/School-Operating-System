@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import { formatDate } from '@/lib/appearance'
 import { StatCard, StatRow } from '@/components/ui'
+import SubmitButton from '@/components/submit-button'
 import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 import { setStudentStatus } from '../actions'
@@ -240,12 +241,12 @@ export default async function OldStudentsPage({ searchParams }) {
                         <form action={setStudentStatus}>
                           <input type="hidden" name="id" value={s.id} />
                           <input type="hidden" name="status" value="active" />
-                          <button
+                          <SubmitButton
                             className="btn btn-ghost !px-2.5 !py-1"
                             title="Return this student to the active roll"
                           >
                             Reactivate
-                          </button>
+                          </SubmitButton>
                         </form>
                       </div>
                     </td>

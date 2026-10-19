@@ -2,6 +2,7 @@ import { getSchoolContext } from '@/lib/school-context'
 import { moveGradeLevel, deleteGradeLevel } from '../actions'
 import GradeLevelPanel from './grade-level-panel'
 import ConfirmButton from '@/components/confirm'
+import SubmitButton from '@/components/submit-button'
 import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 
@@ -185,13 +186,14 @@ export default async function GradeLevelsPage() {
                             <form action={moveGradeLevel} key={direction}>
                               <input type="hidden" name="id" value={row.id} />
                               <input type="hidden" name="direction" value={direction} />
-                              <button
+                              <SubmitButton
+                                pendingLabel={null}
                                 aria-label={`Move ${row.name} ${direction}`}
                                 disabled={direction === 'up' ? index === 0 : index === levels.length - 1}
                                 className="btn btn-ghost !px-2 !py-1 disabled:opacity-30"
                               >
                                 {direction === 'up' ? '↑' : '↓'}
-                              </button>
+                              </SubmitButton>
                             </form>
                           ))}
                         </div>

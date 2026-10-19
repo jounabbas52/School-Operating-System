@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { FEE_METHODS, money } from '@/lib/fee-options'
 import { recordPayment } from '../actions'
 
-function SaveButton() {
-  const { pending } = useFormStatus()
+function SaveButton({ pending }) {
   return (
     <button type="submit" form="payment-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -31,7 +29,7 @@ function SaveButton() {
 // paying the bill in full. Partial payments are typed over it.
 export default function PaymentPanel({ challans, challanId, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(recordPayment, {})
+  const [state, formAction, pending] = useActionState(recordPayment, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const [chosen, setChosen] = useState(challanId ?? challans[0]?.id ?? '')
@@ -46,16 +44,17 @@ export default function PaymentPanel({ challans, challanId, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title="Collect Fee"
         description="Record a payment against a challan"
         icon="₨"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton />
+            <SaveButton pending={pending} />
           </>
         }
       >

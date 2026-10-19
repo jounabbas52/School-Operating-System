@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { ToastProvider } from '@/components/toast'
+import SubmitButton from '@/components/submit-button'
 import ThemeMenu from '@/components/theme-menu'
 import PlatformMark from '@/components/platform-mark'
 import { signOut } from './actions'
@@ -78,7 +79,7 @@ export default async function AdminLayout({ children }) {
               Go to school panel
             </Link>
             <form action={signOut}>
-              <button className="btn btn-primary">Sign out</button>
+              <SubmitButton pendingLabel="Signing out…">Sign out</SubmitButton>
             </form>
           </div>
         </div>
@@ -140,12 +141,13 @@ export default async function AdminLayout({ children }) {
                     {user.email}
                   </span>
                   <form action={signOut}>
-                    <button
+                    <SubmitButton
+                      pendingLabel={null}
                       className="text-[0.68rem] transition hover:text-white"
                       style={{ color: 'var(--side-dim)' }}
                     >
                       Sign out
-                    </button>
+                    </SubmitButton>
                   </form>
                 </span>
               </div>

@@ -2,9 +2,16 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 // The root decides which panel you belong in, so nothing else has to guess.
-// Platform staff have profiles.school_id = NULL and a platform_admins row;
-// everyone else belongs to exactly one school. Sending a school user to
-// /admin would show them a "no platform access" wall, and vice versa.
+//
+// There are two, and only two. Platform staff have profiles.school_id = NULL
+// and a platform_admins row; everybody else belongs to exactly one school and
+// goes to /school, where the sidebar is built from their own page list.
+//
+// There used to be a third -- a teacher panel, reached by inferring "this
+// person looks like a teacher" from their permissions. It guessed wrong often
+// enough to matter, and its way out led back to the guess, so somebody with
+// perfectly good access could be trapped between the two. One panel, and a
+// list of pages, cannot do that.
 export default async function Home() {
   const supabase = await createClient()
 

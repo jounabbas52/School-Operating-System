@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import { Select } from '@/components/combobox'
 import { money } from '@/lib/payroll-options'
 import { saveStructure } from './actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="structure-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -36,7 +34,7 @@ const ALLOWANCES = [
 
 export default function StructurePanel({ row, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveStructure, {})
+  const [state, formAction, pending] = useActionState(saveStructure, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   // A live gross/net footer, because the whole point of the form is the
@@ -67,16 +65,17 @@ export default function StructurePanel({ row, trigger }) {
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? `Edit ${row.name}` : 'New Salary Structure'}
         description="Define allowances & deductions for a designation"
         icon="₨"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >

@@ -1,7 +1,6 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
 import SidePanel from '@/components/side-panel'
 import { useCloseOnSuccess } from '@/components/use-close-on-success'
@@ -9,8 +8,7 @@ import Combobox, { Select } from '@/components/combobox'
 import { dayFromDate } from '@/lib/exam-options'
 import { saveEntry } from './actions'
 
-function SaveButton({ editing }) {
-  const { pending } = useFormStatus()
+function SaveButton({ editing, pending }) {
   return (
     <button type="submit" form="entry-form" disabled={pending} className="btn btn-primary">
       {pending ? (
@@ -28,7 +26,7 @@ function SaveButton({ editing }) {
 
 export default function EntryPanel({ row, classes, subjects, exams, sheets, trigger }) {
   const [open, setOpen] = useState(false)
-  const [state, formAction] = useActionState(saveEntry, {})
+  const [state, formAction, pending] = useActionState(saveEntry, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   // The weekday follows the date instead of being typed. The server writes it
@@ -45,16 +43,17 @@ export default function EntryPanel({ row, classes, subjects, exams, sheets, trig
 
       <SidePanel
         open={open}
+        busy={pending}
         onClose={() => setOpen(false)}
         title={editing ? 'Edit Date Sheet Entry' : 'Add Date Sheet Entry'}
         description="Fill in the exam schedule details"
         icon="▤"
         footer={
           <>
-            <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
+            <button type="button" onClick={() => setOpen(false)} disabled={pending} className="btn btn-ghost">
               Cancel
             </button>
-            <SaveButton editing={editing} />
+            <SaveButton pending={pending} editing={editing} />
           </>
         }
       >
