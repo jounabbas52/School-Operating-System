@@ -16,7 +16,6 @@ import { createClient } from '@/lib/supabase/server'
 const TABLES = [
   // Academic structure
   'sessions',
-  'academic_years',
   'terms',
   'grade_levels',
   'classes',

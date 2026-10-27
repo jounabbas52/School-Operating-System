@@ -50,14 +50,15 @@ function StatusPicker({ defaultValue }) {
   )
 }
 
-export default function ExamPanel({ row, classes, sessions, years, trigger }) {
+export default function ExamPanel({ row, classes, sessions, trigger }) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(saveExam, {})
   useCloseOnSuccess(state, () => setOpen(false))
 
   const editing = Boolean(row)
+  // The session IS the academic year in this schema -- `terms` and `exams`
+  // carry session_id, and there is no separate academic_years table.
   const currentSession = sessions.find((s) => s.is_current)?.id
-  const currentYear = years.find((y) => y.is_active)?.id
 
   return (
     <>
@@ -114,16 +115,16 @@ export default function ExamPanel({ row, classes, sessions, years, trigger }) {
               />
             </div>
             <div>
-              <label className="label" htmlFor="exam-year">
-                Academic Year
+              <label className="label" htmlFor="exam-session">
+                Session
               </label>
-              <Combobox
-                id="exam-year"
-                name="academic_year_id"
-                defaultValue={row?.academic_year_id ?? currentYear ?? ''}
-                placeholder="Search or select year…"
-                options={years}
-                emptyLabel="No academic years yet."
+              <Select
+                id="exam-session"
+                name="session_id"
+                defaultValue={row?.session_id ?? currentSession ?? ''}
+                placeholder="—"
+                options={sessions}
+                emptyLabel="No sessions yet."
               />
             </div>
           </div>
@@ -155,20 +156,6 @@ export default function ExamPanel({ row, classes, sessions, years, trigger }) {
                 className="field"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="label" htmlFor="exam-session">
-              Session
-            </label>
-            <Select
-              id="exam-session"
-              name="session_id"
-              defaultValue={row?.session_id ?? currentSession ?? ''}
-              placeholder="—"
-              options={sessions}
-              emptyLabel="No sessions yet."
-            />
           </div>
 
           <div>

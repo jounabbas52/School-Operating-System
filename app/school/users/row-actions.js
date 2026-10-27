@@ -6,13 +6,12 @@ import Menu, { MenuDivider, MenuItem } from '@/components/menu'
 import SidePanel from '@/components/side-panel'
 import SubmitButton from '@/components/submit-button'
 import { removeUser } from '../actions'
-import AccessEditor from './access-editor'
 import EditUser from './edit-user'
 
 // The two buttons at the end of every row.
 //
 //   ⋯   what to do with the PERSON -- open them, edit them, remove them
-//   ⛨   what they may DO -- the guard, which is the whole access system
+//   ⛨   what they may DO -- opens their access page
 //
 // They are deliberately different shapes. Editing a phone number and handing
 // somebody the payroll are not the same kind of decision, and a menu that
@@ -43,39 +42,41 @@ function Shield() {
   )
 }
 
-export default function RowActions({ person, tree, rows, canWrite, isMe }) {
+export default function RowActions({ person, canWrite, isMe, isAdminRow }) {
   const [editing, setEditing] = useState(false)
   const [removing, setRemoving] = useState(false)
 
   return (
     <span className="flex items-center justify-end gap-1.5">
       {/* ----------------------------------------------------- the guard */}
-      {canWrite && !isMe ? (
-        <AccessEditor
-          profileId={person.id}
-          personName={person.full_name || person.email}
-          tree={tree}
-          rows={rows}
-          trigger={{
-            label: (
-              <span className="flex items-center gap-1.5">
-                <Shield />
-                Access
-              </span>
-            ),
-            className:
-              'inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-medium',
-            style: { borderColor: 'var(--brand)', color: 'var(--brand-ink)' },
-          }}
-        />
-      ) : (
-        <Link
-          href={`/school/users/${person.id}`}
+      {/* A page, not a dialog: setting somebody up is a walk down the whole
+          menu, and a popup made that feel like a quick edit while hiding
+          half the list.
+
+          An administrator has no access list at all, so there is nothing to
+          open -- saying so beats a button that leads to a page explaining
+          there is nothing there. */}
+      {isAdminRow ? (
+        <span
           className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium"
-          style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+          style={{ borderColor: 'var(--amber)', color: 'var(--amber-ink)' }}
+          title="Administrators have full access to everything, always"
         >
           <Shield />
-          View
+          Full access
+        </span>
+      ) : (
+        <Link
+          href={`/school/users/${person.id}/access`}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium"
+          style={
+            canWrite && !isMe
+              ? { borderColor: 'var(--brand)', color: 'var(--brand-ink)' }
+              : { borderColor: 'var(--border)', color: 'var(--muted)' }
+          }
+        >
+          <Shield />
+          {canWrite && !isMe ? 'Access' : 'View access'}
         </Link>
       )}
 
@@ -131,7 +132,7 @@ export default function RowActions({ person, tree, rows, canWrite, isMe }) {
         open={removing}
         onClose={() => setRemoving(false)}
         title={`Delete ${person.full_name || person.email}?`}
-        description="They lose all access immediately"
+        description="This cannot be undone"
         icon="🗑"
         variant="modal"
         width="max-w-md"
@@ -153,13 +154,14 @@ export default function RowActions({ person, tree, rows, canWrite, isMe }) {
         <form id="remove-user-form" action={removeUser}>
           <input type="hidden" name="profile_id" value={person.id} />
           <p className="text-sm" style={{ color: 'var(--muted)' }}>
-            Their access sheet is deleted and they are detached from the school, so they can reach
-            nothing from the moment you press the button.
+            The account is deleted. They disappear from this list, their access goes with them, and
+            the email stops working immediately. There is no undo — you would create them again
+            from scratch.
           </p>
           <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>
-            The sign-in account itself, and everything they ever created, stays intact — the audit
-            trail keeps its author, and adding them back restores the person, though not their
-            access.
+            Kept: the audit trail of what they did, their HR staff record, and any leave history —
+            all with the link to this login blanked. Removing somebody from a user list should not
+            quietly remove them from the payroll.
           </p>
         </form>
       </SidePanel>

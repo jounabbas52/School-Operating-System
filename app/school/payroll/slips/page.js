@@ -4,13 +4,13 @@ import RefreshButton from '@/components/refresh-button'
 import { staffName } from '@/lib/staff-options'
 import { MONTHS } from '@/lib/fee-options'
 import {
-  ITEM_STATUS_LABEL,
-  ITEM_STATUS_TONE,
   RUN_STAGE_LABEL,
   money,
   monthLabel,
   runMonth,
+  toPayslip,
 } from '@/lib/payroll-options'
+import { loadDocument, printDateTime } from '@/lib/documents'
 import SlipView from './slip-view'
 
 export const metadata = { title: 'Salary Slips' }
@@ -37,13 +37,17 @@ export default async function SalarySlipsPage({ searchParams }) {
     const { data } = await supabase
       .from('payroll_items')
       .select(
-        'id, staff_id, basic_salary, allowances, gross_amount, working_days, present_days, absent_days, half_days, late_marks, absence_amount, eobi_amount, pf_amount, tax_amount, deduction_amount, net_amount, payment_mode, status, remarks, staff(first_name, last_name, staff_number, designation, department)'
+        'id, staff_id, basic_salary, allowances, gross_amount, working_days, present_days, absent_days, half_days, leave_days, late_marks, absence_amount, eobi_amount, pf_amount, tax_amount, deduction_amount, net_amount, payment_mode, status, remarks, staff(first_name, last_name, staff_number, designation, department, payment_mode, bank_name, account_number)'
       )
       .eq('school_id', schoolId)
       .eq('payroll_run_id', run.id)
       .eq('is_deleted', false)
     items = (data ?? []).sort((a, b) => staffName(a.staff).localeCompare(staffName(b.staff)))
   }
+
+  // The letterhead. Loaded unconditionally rather than inside the `if (run)`
+  // branch so the empty state still renders without a second code path.
+  const doc = await loadDocument(supabase, schoolId, school)
 
   const selected = items.find((i) => i.staff_id === staffId) ?? items[0] ?? null
 
@@ -88,6 +92,14 @@ export default async function SalarySlipsPage({ searchParams }) {
             </select>
             <button className="btn btn-ghost">Go</button>
           </form>
+          {items.length > 0 && (
+            <Link
+              href={`/school/payroll/slips/print?year=${year}&month=${month}`}
+              className="btn btn-ghost"
+            >
+              Print all {items.length}
+            </Link>
+          )}
           <Link href={`/school/payroll/run?year=${year}&month=${month}`} className="btn btn-ghost">
             Payroll Run
           </Link>
@@ -163,17 +175,9 @@ export default async function SalarySlipsPage({ searchParams }) {
           {/* --------------------------------------------------------- the slip */}
           {selected && (
             <SlipView
-              schoolName={school?.school_name ?? 'School'}
-              period={monthLabel(period)}
-              item={selected}
-              employee={{
-                name: staffName(selected.staff),
-                number: selected.staff?.staff_number,
-                designation: selected.staff?.designation,
-                department: selected.staff?.department,
-              }}
-              statusLabel={ITEM_STATUS_LABEL[selected.status] ?? selected.status}
-              statusTone={ITEM_STATUS_TONE[selected.status] ?? 'pill-muted'}
+              slip={toPayslip(selected, { period })}
+              doc={doc}
+              printedAt={printDateTime()}
             />
           )}
         </div>

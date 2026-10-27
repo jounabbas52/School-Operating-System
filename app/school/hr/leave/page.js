@@ -15,7 +15,7 @@ import {
 import { deleteLeave, setLeaveStatus } from '../actions'
 import LeavePanel from './leave-panel'
 
-export const metadata = { title: 'Leave Management' }
+export const metadata = { title: 'Leave Requests' }
 
 export default async function LeavePage({ searchParams }) {
   const params = await searchParams
@@ -100,7 +100,7 @@ export default async function LeavePage({ searchParams }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
-            Leave Management
+            Leave Requests
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: 'var(--muted)' }}>
             {counts[''] } application{counts[''] === 1 ? '' : 's'} on file · {counts.pending} awaiting review

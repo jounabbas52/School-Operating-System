@@ -68,6 +68,9 @@ export default function StudentPanel({
   schoolId,
   photoUrl,
   trigger,
+  // Set when this form is being used to enrol an applicant. saveStudent then
+  // marks that application enrolled and links it to the pupil it became.
+  applicationId,
 }) {
   const [open, setOpen] = useState(false)
   const [state, formAction, pending] = useActionState(saveStudent, {})
@@ -105,6 +108,9 @@ export default function StudentPanel({
       >
         <form id="student-form" action={formAction} className="flex flex-col gap-6">
           {editing && <input type="hidden" name="id" value={row.id} />}
+          {applicationId && (
+            <input type="hidden" name="application_id" value={applicationId} />
+          )}
           {/* The class combobox writes here; the visible one only drives the
               section filter. */}
           <input type="hidden" name="current_class_id" value={classId} />

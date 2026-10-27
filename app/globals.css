@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* The printed-document stylesheet. Its own file because it is the one block
+   here that reads no theme token: see the comment at the top of it. */
+@import "./documents.css";
 
 /* ===========================================================================
    THEME TOKENS
@@ -670,9 +673,18 @@ select.field {
 }
 
 /* ===========================================================================
-   PRINT — certificates and ID cards
+   PRINT — hiding the app
    The browser's Save-as-PDF is the print path, so everything that is not the
-   sheet itself has to disappear.
+   document itself has to disappear. What the document then looks like is in
+   documents.css; this block only clears the app out of its way.
+
+   The .print-sheet / .print-area / .print-grid rules that used to live here
+   are gone with the screens that used them -- every printed thing now goes
+   through the .doc system, which sizes itself in millimetres instead of
+   relying on three !important overrides. So is the @page margin: each print
+   route emits its own @page through <PaperRule>, because the paper size is a
+   per-document setting and the sheets carry their own padding -- a margin
+   here stacked with it and pushed a full-height A4 onto two pages.
 =========================================================================== */
 @media print {
   body { background: #fff; }
@@ -680,20 +692,6 @@ select.field {
   aside,
   header { display: none !important; }
   main { padding: 0 !important; }
-
-  .print-area { display: block !important; }
-  .print-sheet {
-    box-shadow: none !important;
-    border: 0 !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-  .print-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 8mm !important;
-  }
-  @page { margin: 12mm; }
 }
 
 /* Tabs inside settings panels */

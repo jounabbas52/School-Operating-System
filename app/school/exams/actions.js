@@ -70,7 +70,6 @@ export async function saveExam(_prev, formData) {
     name,
     class_id: classId,
     session_id: text(formData.get('session_id')),
-    academic_year_id: text(formData.get('academic_year_id')),
     start_date: startDate,
     end_date: endDate,
     description: text(formData.get('description')),

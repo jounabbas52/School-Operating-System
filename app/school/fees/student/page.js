@@ -14,16 +14,23 @@ import {
   remaining,
   studentName,
 } from '@/lib/fee-options'
+import { feePayers } from '../payers'
 import PaymentPanel from '../collect/payment-panel'
+import BillAheadPanel from './bill-ahead-panel'
 
-export const metadata = { title: 'Student Fee Search' }
+export const metadata = { title: 'Student Ledger' }
 
 export default async function StudentFeeSearchPage({ searchParams }) {
   const params = await searchParams
   const q = (params?.q ?? '').trim()
   const studentId = params?.student ?? ''
+  // A statement is always "as at" a date. Blank means today, which is what
+  // the counter wants; a date is what an auditor asking "what did they owe in
+  // March?" wants, and the running balance has to answer that honestly.
+  const asOf = (params?.as_of ?? '').trim()
 
   const { schoolId, permissions, supabase } = await getSchoolContext()
+  const payers = await feePayers(supabase, schoolId)
   const canWrite = permissions.has('fees.write')
 
   // Nothing is fetched until someone searches: this screen opens on a search
@@ -49,19 +56,27 @@ export default async function StudentFeeSearchPage({ searchParams }) {
   let challans = []
   let payments = []
   let policy = null
+  let statement = []
+  let credit = 0
 
   if (studentId) {
     const { data } = await supabase
       .from('students')
       .select(
-        'id, first_name, last_name, father_name, admission_number, roll_number, final_fee, base_fee, current_class_id, current_section_id'
+        'id, first_name, last_name, father_name, admission_number, roll_number, final_fee, base_fee, fee_balance, current_class_id, current_section_id'
       )
       .eq('id', studentId)
       .maybeSingle()
     student = data ?? null
 
     if (student) {
-      const [{ data: challanRows }, { data: paymentRows }, { data: policyRow }] = await Promise.all([
+      const [
+        { data: challanRows },
+        { data: paymentRows },
+        { data: policyRow },
+        { data: statementRows },
+        { data: creditAmount },
+      ] = await Promise.all([
         supabase
           .from('fee_challans')
           .select(
@@ -87,10 +102,21 @@ export default async function StudentFeeSearchPage({ searchParams }) {
           .eq('status', 'active')
           .eq('class_id', student.current_class_id)
           .maybeSingle(),
+        // The statement itself. Charges and payments in the order they
+        // happened, with the balance after each -- which is the one thing the
+        // challan table alone can never show, because it has no row for a
+        // payment and no idea what the balance was between two of them.
+        supabase.rpc('student_ledger', {
+          p_student: student.id,
+          p_as_of: asOf || null,
+        }),
+        supabase.rpc('available_credit', { p_student: student.id }),
       ])
       challans = challanRows ?? []
       payments = paymentRows ?? []
       policy = policyRow ?? null
+      statement = statementRows ?? []
+      credit = Number(creditAmount) || 0
     }
   }
 
@@ -129,20 +155,29 @@ export default async function StudentFeeSearchPage({ searchParams }) {
     status: CHALLAN_STATUS_LABEL[c.state] ?? c.state,
   }))
 
-  const openChallans = ledger
-    .filter((c) => c.state !== 'paid' && c.state !== 'cancelled')
-    .map((c) => ({
-      id: c.id,
-      label: `${c.challan_number ?? 'Challan'} · ${FEE_TYPE_LABEL[c.fee_type] ?? c.fee_type} · ${money(remaining(c))} due`,
-      outstanding: remaining(c),
-    }))
+  // The balance the ledger arrived at, which is the figure of record. The
+  // billed-less-collected sum below it is a cross-check: when the two
+  // disagree, something wrote a challan or a payment without the ledger
+  // seeing it, and that is worth noticing rather than hiding.
+  const balance = statement.length
+    ? Number(statement[statement.length - 1].balance) || 0
+    : Number(student?.fee_balance) || 0
+
+  const statementRowsOut = statement.map((e, i) => ({
+    n: i + 1,
+    date: e.entry_date ?? '',
+    detail: e.description ?? '',
+    debit: Number(e.debit) || 0,
+    credit: Number(e.credit) || 0,
+    balance: Number(e.balance) || 0,
+  }))
 
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
-            Student Fee Search
+            Student Ledger
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: 'var(--muted)' }}>
             Search a student by name to view and manage their fee ledger.
@@ -324,11 +359,21 @@ export default async function StudentFeeSearchPage({ searchParams }) {
             ))}
 
             <div className="ml-auto flex items-center gap-2">
-              {canWrite && openChallans.length > 0 && (
-                <PaymentPanel
-                  challans={openChallans}
-                  trigger={{ label: 'Collect Fee', className: 'btn btn-primary' }}
-                />
+              {canWrite && (
+                <>
+                  <BillAheadPanel
+                    studentId={studentId}
+                    monthlyFee={student.final_fee ?? student.base_fee}
+                    trigger={{ label: 'Bill Ahead', className: 'btn btn-ghost' }}
+                  />
+                  {payers.length > 0 && (
+                    <PaymentPanel
+                      students={payers}
+                      studentId={studentId}
+                      trigger={{ label: 'Collect Fee', className: 'btn btn-primary' }}
+                    />
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -347,11 +392,22 @@ export default async function StudentFeeSearchPage({ searchParams }) {
             </p>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             {[
               { label: 'Total billed', value: money(billed), tone: 'var(--ink)' },
               { label: 'Total paid', value: money(collected), tone: 'var(--green)' },
-              { label: 'Outstanding', value: money(due), tone: due > 0 ? 'var(--red)' : 'var(--muted)' },
+              {
+                // One figure, signed, rather than "outstanding" and "advance"
+                // as two cards that can never both be true.
+                label: balance > 0 ? 'Balance owing' : balance < 0 ? 'Held in advance' : 'Balance',
+                value: money(Math.abs(balance)),
+                tone: balance > 0 ? 'var(--red)' : balance < 0 ? 'var(--green)' : 'var(--muted)',
+              },
+              {
+                label: 'Unapplied advance',
+                value: money(credit),
+                tone: credit > 0 ? 'var(--green)' : 'var(--muted)',
+              },
             ].map((s) => (
               <div key={s.label} className="card p-4">
                 <p className="text-xs" style={{ color: 'var(--muted)' }}>
@@ -362,6 +418,155 @@ export default async function StudentFeeSearchPage({ searchParams }) {
                 </p>
               </div>
             ))}
+          </div>
+
+          {/* ------------------------------------------------- statement */}
+          <div className="card overflow-hidden">
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"
+              style={{ borderColor: 'var(--border)', background: 'var(--card-alt)' }}
+            >
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                  Statement of Account
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: 'var(--muted)' }}>
+                  Every charge and payment in order, with the balance after each
+                  {asOf ? ` · as at ${dateLabel(asOf)}` : ''}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <form className="flex items-center gap-2">
+                  <input type="hidden" name="student" value={studentId} />
+                  <label className="text-xs" style={{ color: 'var(--muted)' }} htmlFor="as-of">
+                    As at
+                  </label>
+                  <input
+                    id="as-of"
+                    name="as_of"
+                    type="date"
+                    defaultValue={asOf}
+                    className="field !w-40 !py-1"
+                  />
+                  <button className="btn btn-ghost !px-2.5 !py-1">Apply</button>
+                </form>
+                {asOf && (
+                  <Link
+                    href={`/school/fees/student?student=${studentId}`}
+                    className="text-xs font-semibold"
+                    style={{ color: 'var(--brand)' }}
+                  >
+                    Today
+                  </Link>
+                )}
+                <ExportButtons
+                  rows={statementRowsOut}
+                  columns={[
+                    { key: 'n', label: '#' },
+                    { key: 'date', label: 'Date' },
+                    { key: 'detail', label: 'Detail' },
+                    { key: 'debit', label: 'Charge' },
+                    { key: 'credit', label: 'Paid' },
+                    { key: 'balance', label: 'Balance' },
+                  ]}
+                  filename={`statement-${student.admission_number ?? student.id.slice(0, 8)}`}
+                  title={`Statement of Account — ${studentName(student)}`}
+                  subtitle={asOf ? `As at ${dateLabel(asOf)}` : undefined}
+                />
+              </div>
+            </div>
+
+            {!statement.length ? (
+              <p className="px-6 py-14 text-center text-sm" style={{ color: 'var(--muted)' }}>
+                Nothing has been charged or received yet.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="table min-w-[44rem]">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Detail</th>
+                      <th className="text-right">Charge</th>
+                      <th className="text-right">Paid</th>
+                      <th className="text-right">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statement.map((e) => {
+                      const bal = Number(e.balance) || 0
+                      return (
+                        <tr key={e.id}>
+                          <td className="whitespace-nowrap tabular-nums">
+                            {dateLabel(e.entry_date)}
+                          </td>
+                          <td>
+                            {e.challan_id ? (
+                              <Link
+                                href={`/school/fees/challans/print?id=${e.challan_id}`}
+                                className="underline"
+                                style={{ color: 'var(--brand-ink)' }}
+                              >
+                                {e.description ?? '—'}
+                              </Link>
+                            ) : (
+                              (e.description ?? '—')
+                            )}
+                          </td>
+                          <td className="text-right tabular-nums">
+                            {e.debit ? money(e.debit) : '—'}
+                          </td>
+                          <td className="text-right tabular-nums" style={{ color: 'var(--green)' }}>
+                            {e.credit ? money(e.credit) : '—'}
+                          </td>
+                          <td className="text-right font-medium tabular-nums">
+                            {/* Signed, and labelled: a negative balance is money the
+                                school holds, not a debt, and Cr is how every parent
+                                has seen that written. */}
+                            <span
+                              style={{
+                                color:
+                                  bal > 0
+                                    ? 'var(--red)'
+                                    : bal < 0
+                                      ? 'var(--green)'
+                                      : 'var(--muted)',
+                              }}
+                            >
+                              {money(Math.abs(bal))}
+                              {bal < 0 ? ' Cr' : ''}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={4} className="text-right font-semibold">
+                        {balance > 0 ? 'Balance owing' : balance < 0 ? 'Held in advance' : 'Settled'}
+                      </td>
+                      <td className="text-right font-semibold tabular-nums">
+                        <span
+                          style={{
+                            color:
+                              balance > 0
+                                ? 'var(--red)'
+                                : balance < 0
+                                  ? 'var(--green)'
+                                  : 'var(--muted)',
+                          }}
+                        >
+                          {money(Math.abs(balance))}
+                          {balance < 0 ? ' Cr' : ''}
+                        </span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
 
           {/* ---------------------------------------------------- ledger */}
@@ -395,6 +600,7 @@ export default async function StudentFeeSearchPage({ searchParams }) {
                       <th className="text-right">Due</th>
                       <th>Due date</th>
                       <th>Status</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -425,6 +631,14 @@ export default async function StudentFeeSearchPage({ searchParams }) {
                           <span className={`pill ${CHALLAN_STATUS_TONE[c.state] ?? 'pill-muted'}`}>
                             {CHALLAN_STATUS_LABEL[c.state] ?? c.state}
                           </span>
+                        </td>
+                        <td className="text-right">
+                          <Link
+                            href={`/school/fees/challans/print?id=${c.id}`}
+                            className="btn btn-ghost !px-2.5 !py-1"
+                          >
+                            Print
+                          </Link>
                         </td>
                       </tr>
                     ))}
@@ -462,6 +676,7 @@ export default async function StudentFeeSearchPage({ searchParams }) {
                       <th>Method</th>
                       <th>Reference</th>
                       <th className="text-right">Amount</th>
+                      <th className="text-right">Receipt</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -477,6 +692,18 @@ export default async function StudentFeeSearchPage({ searchParams }) {
                         <td>{p.reference ?? '—'}</td>
                         <td className="text-right tabular-nums" style={{ color: 'var(--green)' }}>
                           {money(p.amount_paid)}
+                        </td>
+                        <td className="text-right">
+                          {/* Reprinting a receipt is the single most common
+                              counter request after taking the money -- the
+                              parent lost theirs, or wants one for an
+                              employer. */}
+                          <Link
+                            href={`/school/fees/receipts/print?id=${p.id}`}
+                            className="btn btn-ghost !px-2.5 !py-1"
+                          >
+                            Print
+                          </Link>
                         </td>
                       </tr>
                     ))}

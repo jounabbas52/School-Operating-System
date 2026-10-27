@@ -1,0 +1,755 @@
+/* ===========================================================================
+   PRINTED DOCUMENTS — the .doc system
+   ---------------------------------------------------------------------------
+   Its own file, imported by globals.css, because it is the one part of the
+   stylesheet that is NOT the app: nothing here reads a theme token, and
+   nothing here is ever seen on screen except as a preview of paper.
+
+   The app styles itself from CSS variables that follow the viewer's light or
+   dark preference. A sheet going to a printer must not: dark mode would print
+   a black rectangle, and a card sized in rem comes out of a card printer at
+   the wrong size. So everything under .doc is ink on white, in millimetres,
+   and the only colour that varies is --doc-accent, which each sheet sets from
+   the school's document settings.
+
+   print-color-adjust: exact is load-bearing. Without it browsers drop the
+   accent fills and the table-head shading "to save ink", and a fee challan
+   comes out as unruled grey text that no bank counter will accept.
+=========================================================================== */
+.doc {
+  --doc-accent: #1e3a8a;
+  --doc-ink: #111827;
+  --doc-ink-2: #374151;
+  --doc-muted: #6b7280;
+  --doc-line: #9ca3af;
+  --doc-line-soft: #d1d5db;
+  position: relative;
+  background: #fff;
+  color: var(--doc-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 9.5pt;
+  line-height: 1.45;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.doc * { box-sizing: border-box; }
+.doc p { margin: 0; }
+
+/* NOT overflow:hidden.
+   A sheet is a fixed paper size, and content that does not fit has to be
+   visible about it. Clipping was the first thing tried here and it is the
+   worst available failure: the preview looked correct and the third copy came
+   out of the printer with its signature line sliced off, with nothing on
+   screen to suggest it. Overflowing shows up immediately in the preview, and
+   in print the browser pushes the excess onto another page rather than
+   destroying it. */
+.doc-sheet { margin-inline: auto; }
+
+/* On screen a sheet is a page sitting on the app's canvas; in print it is the
+   page itself, so the frame and the shadow go away. */
+.doc-preview { overflow-x: auto; padding-bottom: 0.5rem; }
+.doc-preview .doc-sheet {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 10px 30px -12px rgb(15 23 42 / 0.25);
+}
+
+.doc-watermark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Everything that is not the watermark stacks above it. */
+.doc-sheet > *:not(.doc-watermark) { position: relative; z-index: 1; }
+
+/* ------------------------------------------------------------------ header */
+.doc-head { margin-bottom: 3mm; }
+
+.doc-classic { display: flex; align-items: center; gap: 4mm; }
+.doc-classic-text { flex: 1; min-width: 0; text-align: center; }
+
+.doc-crest { flex-shrink: 0; object-fit: contain; }
+.doc-crest-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--doc-line-soft);
+  border-radius: 50%;
+  color: var(--doc-accent);
+  font-size: 14pt;
+  font-weight: 700;
+}
+.doc-crest-spacer { flex-shrink: 0; }
+
+.doc-name {
+  color: var(--doc-accent);
+  font-size: 19pt;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+.doc-name-sm { font-size: 13pt; }
+.doc-name-reverse { color: #fff; }
+
+.doc-tagline { margin-top: 0.6mm; color: var(--doc-ink-2); font-size: 8pt; font-style: italic; }
+.doc-tagline-reverse { color: rgb(255 255 255 / 0.85); }
+
+.doc-contact { margin-top: 1mm; color: var(--doc-muted); font-size: 7.5pt; line-height: 1.35; }
+.doc-banner .doc-contact { color: rgb(255 255 255 / 0.8); }
+
+.doc-reg {
+  margin-top: 0.6mm;
+  color: var(--doc-ink-2);
+  font-size: 7pt;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The double rule under a classic masthead: one thick accent line with a hair
+   line under it. Two borders on ONE element rather than two elements, so the
+   pair can never be split by a page break. */
+.doc-rule {
+  margin-top: 2.5mm;
+  height: 0.9mm;
+  border-top: 0.9mm solid var(--doc-accent);
+  border-bottom: 0.25mm solid var(--doc-accent);
+}
+.doc-rule-thin { margin-top: 2mm; border-top: 0.3mm solid var(--doc-accent); }
+
+.doc-title-bar { margin-top: 3mm; text-align: center; }
+.doc-title {
+  display: inline-block;
+  padding: 1.1mm 6mm;
+  background: var(--doc-accent);
+  border-radius: 1mm;
+  color: #fff;
+  font-size: 10pt;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.doc-title-sm {
+  padding: 0;
+  background: none;
+  color: var(--doc-accent);
+  font-size: 9pt;
+}
+
+.doc-banner {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+  padding: 3mm 4mm;
+  background: var(--doc-accent);
+  border-radius: 1mm;
+}
+.doc-banner-text { flex: 1; min-width: 0; }
+.doc-title-chip {
+  flex-shrink: 0;
+  padding: 1mm 3mm;
+  background: rgb(255 255 255 / 0.18);
+  border: 0.25mm solid rgb(255 255 255 / 0.4);
+  border-radius: 1mm;
+  color: #fff;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.doc-minimal { display: flex; align-items: baseline; justify-content: space-between; gap: 4mm; }
+
+.doc-meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4mm;
+  margin-top: 2.5mm;
+}
+.doc-subtitle { color: var(--doc-ink-2); font-size: 8.5pt; font-weight: 600; }
+.doc-meta { display: flex; flex-wrap: wrap; gap: 4mm; margin-left: auto; }
+.doc-meta-item { font-size: 8pt; white-space: nowrap; }
+.doc-meta-label { color: var(--doc-muted); }
+.doc-meta-label::after { content: " "; }
+.doc-meta-value { color: var(--doc-ink); font-weight: 700; }
+
+/* ------------------------------------------------------------ field tables */
+.doc-fields,
+.doc-amounts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+}
+
+.doc-fields th,
+.doc-fields td {
+  padding: 1.4mm 2mm;
+  border: 0.2mm solid var(--doc-line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+.doc-fields th {
+  width: 1%;
+  background: #f3f4f6;
+  color: var(--doc-muted);
+  font-size: 7.5pt;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.doc-fields td { color: var(--doc-ink); font-weight: 600; }
+.doc-fields-dense th,
+.doc-fields-dense td { padding: 0.9mm 1.6mm; font-size: 7.5pt; }
+
+/* ------------------------------------------------------------ amount table */
+.doc-amounts { margin-top: 3mm; }
+.doc-amounts th,
+.doc-amounts td { padding: 1.5mm 2mm; border: 0.2mm solid var(--doc-line); }
+.doc-amounts thead th {
+  background: var(--doc-accent);
+  color: #fff;
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+.doc-amounts tbody td { color: var(--doc-ink); }
+.doc-amounts .doc-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.doc-line-note { display: block; color: var(--doc-muted); font-size: 7pt; font-weight: 400; }
+.doc-blank-row td { height: 5mm; }
+.doc-amounts tfoot th {
+  background: #f3f4f6;
+  color: var(--doc-ink);
+  font-size: 8.5pt;
+  font-weight: 700;
+  text-align: left;
+}
+.doc-amounts tfoot td { font-weight: 700; }
+.doc-amounts tfoot .doc-total-strong th,
+.doc-amounts tfoot .doc-total-strong td {
+  background: var(--doc-accent);
+  color: #fff;
+  font-size: 10pt;
+}
+
+/* ------------------------------------------------------------- signatures */
+.doc-sign-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6mm;
+  margin-top: 8mm;
+}
+.doc-sign { flex: 0 1 auto; }
+.doc-sign-art {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 11mm;
+}
+.doc-sign-img { max-height: 11mm; max-width: 100%; object-fit: contain; }
+.doc-sign-stamp { position: absolute; right: 0; bottom: -2mm; }
+.doc-sign-rule {
+  display: block;
+  margin-bottom: 1mm;
+  border-top: 0.25mm solid var(--doc-ink-2);
+}
+.doc-sign-name { display: block; color: var(--doc-ink); font-size: 8pt; font-weight: 700; }
+.doc-sign-label { display: block; color: var(--doc-muted); font-size: 7.5pt; }
+/* The seal belongs between the signatures, which on a flex row means it has
+   to be pulled out of source order -- the signatures are the content, the
+   seal is decoration added after them in the markup. */
+.doc-seal-slot { display: flex; align-items: center; justify-content: center; order: -1; flex: 1; }
+.doc-stamp { object-fit: contain; }
+
+/* ---------------------------------------------------------- office-use box */
+.doc-office {
+  margin-top: 4mm;
+  padding: 2mm 2.5mm;
+  border: 0.2mm dashed var(--doc-line);
+  border-radius: 1mm;
+}
+.doc-office-label {
+  margin-bottom: 1.5mm;
+  color: var(--doc-muted);
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.doc-office-rows { display: flex; gap: 4mm; }
+.doc-office-row { flex: 1; display: flex; align-items: baseline; gap: 1.5mm; }
+.doc-office-key { color: var(--doc-muted); font-size: 7.5pt; white-space: nowrap; }
+.doc-office-fill { flex: 1; height: 4mm; border-bottom: 0.2mm dotted var(--doc-line); }
+
+/* ----------------------------------------------------------------- footer */
+.doc-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4mm;
+  margin-top: 4mm;
+  padding-top: 1.5mm;
+  border-top: 0.2mm solid var(--doc-line-soft);
+  color: var(--doc-muted);
+  font-size: 6.5pt;
+}
+.doc-foot-right { text-align: right; white-space: nowrap; }
+.doc-foot-time { display: block; }
+
+.doc-break { break-after: page; page-break-after: always; }
+
+/* ===========================================================================
+   CHALLAN — the three-copy slip
+   One A4 cut into equal horizontal bands, one per copy, with a scissor rule
+   between them. The bands are a grid rather than three stacked divs so every
+   copy is the same height however much a particulars table grows.
+=========================================================================== */
+.doc-copies { display: grid; gap: 0; }
+/* A column, so a copy's signature block can be pinned to the bottom edge of
+   its track with margin-top:auto. Three copies whose signature lines sit at
+   three different heights read as three different forms. */
+.doc-copy {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 4mm 5mm;
+  min-width: 0;
+}
+.doc-copy + .doc-copy { border-top: 0.3mm dashed var(--doc-line); }
+
+/* Copies side by side instead of stacked: the scissor rule runs down between
+   them, not across. */
+.doc-copies-across .doc-copy { padding: 3mm 3.5mm; }
+.doc-copies-across .doc-copy + .doc-copy {
+  border-top: 0;
+  border-left: 0.3mm dashed var(--doc-line);
+}
+.doc-copies-across .doc-cut-note {
+  top: 50%;
+  bottom: auto;
+  left: auto;
+  right: -2.2mm;
+  transform: translateY(-50%) rotate(90deg);
+}
+.doc-copy-tag {
+  position: absolute;
+  top: 4mm;
+  right: 5mm;
+  padding: 0.8mm 2.5mm;
+  background: var(--doc-accent);
+  border-radius: 0.8mm;
+  color: #fff;
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.doc-cut-note {
+  position: absolute;
+  left: 50%;
+  bottom: -2.2mm;
+  transform: translateX(-50%);
+  padding: 0 2mm;
+  background: #fff;
+  color: var(--doc-muted);
+  font-size: 6pt;
+  letter-spacing: 0.08em;
+}
+
+/* The bank block on a challan: label/value pairs in a tinted panel, because
+   the teller reads it standing up. */
+.doc-bank {
+  margin-top: 2.5mm;
+  padding: 2mm 2.5mm;
+  background: #f3f4f6;
+  border-left: 0.8mm solid var(--doc-accent);
+  border-radius: 0 1mm 1mm 0;
+}
+.doc-bank-title {
+  color: var(--doc-accent);
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.doc-bank-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6mm 4mm;
+  margin-top: 1mm;
+  font-size: 7.5pt;
+}
+.doc-bank-item { display: flex; gap: 1.5mm; }
+.doc-bank-key { color: var(--doc-muted); }
+.doc-bank-val { color: var(--doc-ink); font-weight: 600; }
+
+.doc-words {
+  margin-top: 2mm;
+  padding: 1.4mm 2mm;
+  border: 0.2mm solid var(--doc-line-soft);
+  border-radius: 1mm;
+  font-size: 8pt;
+}
+.doc-words-key {
+  color: var(--doc-muted);
+  font-size: 7pt;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.doc-words-val { color: var(--doc-ink); font-weight: 700; font-style: italic; }
+
+.doc-note {
+  margin-top: 2mm;
+  color: var(--doc-muted);
+  font-size: 6.5pt;
+  line-height: 1.4;
+}
+
+.doc-barcode { display: flex; justify-content: flex-end; margin-top: 2mm; }
+
+/* A diagonal PAID / CANCELLED overprint. Nothing stops a clerk reprinting a
+   settled challan, so the sheet says so itself. */
+.doc-overprint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-18deg);
+  padding: 1mm 6mm;
+  border: 1mm solid currentColor;
+  border-radius: 2mm;
+  color: #16a34a;
+  font-size: 20pt;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  opacity: 0.28;
+  pointer-events: none;
+  z-index: 2;
+}
+.doc-overprint-red { color: #dc2626; }
+
+/* ===========================================================================
+   CERTIFICATES
+=========================================================================== */
+/* A sheet whose content has to reach the bottom edge -- a certificate, whose
+   signatures belong on the last line of the paper and not directly under a
+   three-sentence body. */
+.doc-sheet-flex { display: flex; flex-direction: column; }
+
+.doc-cert { flex: 1; display: flex; flex-direction: column; }
+.doc-cert-frame {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 8mm;
+  border: 1mm solid var(--doc-accent);
+}
+/* The double frame of a classic certificate: an outer accent rule and an
+   inner hair rule with a gap between, which is what `double` gives us
+   natively at this border width. */
+.doc-cert-frame-double { border-style: double; border-width: 2mm; }
+.doc-cert-frame-solid { border-style: solid; border-width: 0.8mm; }
+.doc-cert-frame-dashed { border-style: dashed; border-width: 0.6mm; }
+.doc-cert-frame-none { border: 0; padding: 4mm; }
+
+/* Ornate: corner flourishes drawn as four L-shaped brackets. Borders on
+   pseudo-elements rather than an SVG, so they scale with the paper and cost
+   no request. */
+.doc-cert-ornate { position: relative; }
+.doc-cert-ornate::before,
+.doc-cert-ornate::after {
+  content: "";
+  position: absolute;
+  width: 18mm;
+  height: 18mm;
+  border: 0.6mm solid var(--doc-accent);
+}
+.doc-cert-ornate::before { top: 3mm; left: 3mm; border-right: 0; border-bottom: 0; }
+.doc-cert-ornate::after { bottom: 3mm; right: 3mm; border-left: 0; border-top: 0; }
+.doc-cert-corner {
+  position: absolute;
+  width: 18mm;
+  height: 18mm;
+  border: 0.6mm solid var(--doc-accent);
+}
+.doc-cert-corner-tr { top: 3mm; right: 3mm; border-left: 0; border-bottom: 0; }
+.doc-cert-corner-bl { bottom: 3mm; left: 3mm; border-right: 0; border-top: 0; }
+
+.doc-cert-body {
+  flex: 1;
+  margin-top: 6mm;
+  font-size: 11pt;
+  line-height: 2;
+  text-align: justify;
+  white-space: pre-line;
+}
+.doc-cert-body-centred { text-align: center; }
+/* The serif body a certificate is expected to be set in. Georgia is on every
+   machine a school is likely to print from; the fallbacks cover the rest. */
+.doc-cert-serif { font-family: Georgia, "Times New Roman", serif; }
+
+.doc-cert-kicker {
+  margin-top: 4mm;
+  color: var(--doc-muted);
+  font-size: 8pt;
+  letter-spacing: 0.3em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.doc-cert-title {
+  margin-top: 1mm;
+  color: var(--doc-accent);
+  font-size: 22pt;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  line-height: 1.15;
+}
+.doc-cert-flourish {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2mm;
+  margin-top: 2mm;
+}
+.doc-cert-flourish span {
+  display: block;
+  width: 18mm;
+  height: 0.3mm;
+  background: var(--doc-accent);
+}
+.doc-cert-flourish b {
+  display: block;
+  width: 2mm;
+  height: 2mm;
+  background: var(--doc-accent);
+  transform: rotate(45deg);
+}
+
+.doc-cert-serial {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4mm;
+  font-size: 8pt;
+}
+.doc-cert-serial span { color: var(--doc-muted); }
+.doc-cert-serial strong { color: var(--doc-ink); }
+
+/* Modern: a solid accent spine down the left edge instead of a frame. */
+.doc-cert-modern { padding-left: 14mm; }
+.doc-cert-spine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8mm;
+  background: var(--doc-accent);
+}
+
+.doc-cert-photo {
+  width: 28mm;
+  height: 34mm;
+  object-fit: cover;
+  border: 0.3mm solid var(--doc-line);
+}
+.doc-cert-photo-slot {
+  position: absolute;
+  top: 10mm;
+  right: 10mm;
+  z-index: 2;
+}
+
+/* ===========================================================================
+   ID CARDS
+   CR80 is 85.6 x 54 mm. Sized in mm so a card printer gets a card, and laid
+   out as a fixed-size box because every element inside is positioned against
+   that size.
+=========================================================================== */
+.doc-card {
+  --doc-accent: #7c3aed;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  color: #111827;
+  border-radius: 3mm;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.doc-card * { box-sizing: border-box; }
+.doc-card p { margin: 0; }
+
+/* FLEX, NOT GRID, AND THAT IS THE WHOLE BUG FIX.
+   This was `repeat(auto-fill, minmax(54mm, max-content))`. 54mm is the card's
+   PORTRAIT width, so a landscape card -- 85.6mm -- was 31.6mm wider than the
+   track it sat in. auto-fill counts columns off the 54mm minimum, so it laid
+   out four of them, found no free space to grow them into, left every track
+   at its 54mm base, and each card then overflowed into the one beside it.
+   That is the "cards on top of each other" on screen, and two cards printed
+   over each other on paper.
+
+   Flex has no track to be wrong about: each card is already sized in mm by
+   dims() in components/print/id-card.js, so wrapping on intrinsic width is
+   correct for portrait, landscape and a school's custom pixel size alike,
+   with no number here that has to be kept in step with that function. */
+.doc-card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 6mm;
+}
+/* Never shrink to fit a row: a card narrower than CR80 is not a card. */
+.doc-card-grid > .doc-card { flex: 0 0 auto; }
+
+/* HOVER TO READ IT.
+   A card is 85.6mm -- about 324px -- and 5pt type at that size is not
+   readable at a glance. Hovering lifts one card over its neighbours and
+   enlarges it in place, which is why the z-index and the shadow come along:
+   without them a scaled card slides UNDER the next one and reads as a
+   rendering fault rather than a zoom.
+
+   Screen only. In print there is no hover, and a transform here would scale
+   a card off the page. */
+@media screen {
+  .doc-card-grid > .doc-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+    transform-origin: center center;
+  }
+  .doc-card-grid > .doc-card:hover {
+    transform: scale(var(--doc-card-zoom, 1.75));
+    box-shadow: 0 1.5rem 3rem rgb(15 23 42 / 0.45);
+    z-index: 20;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .doc-card-grid > .doc-card { transition: none; }
+}
+
+.doc-card-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.1;
+  z-index: 0;
+}
+.doc-card > *:not(.doc-card-bg) { position: relative; z-index: 1; }
+
+.doc-card-head {
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+  padding: 2mm 2.5mm;
+  color: #fff;
+}
+.doc-card-logo { width: 7mm; height: 7mm; flex-shrink: 0; object-fit: contain; }
+.doc-card-school {
+  font-size: 7pt;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+.doc-card-kicker { font-size: 5.2pt; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.85; }
+
+.doc-card-photo {
+  width: 20mm;
+  height: 24mm;
+  object-fit: cover;
+  border-radius: 1.5mm;
+  border: 0.4mm solid #fff;
+  background: #e5e7eb;
+}
+.doc-card-photo-round { width: 19mm; height: 19mm; border-radius: 50%; }
+.doc-card-photo-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 11pt;
+  font-weight: 700;
+}
+
+.doc-card-name {
+  font-size: 9pt;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.doc-card-sub { font-size: 6.2pt; color: #6b7280; }
+
+.doc-card-rows { display: flex; flex-direction: column; gap: 0.5mm; font-size: 6.2pt; }
+.doc-card-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1.5mm; }
+.doc-card-row dt { color: #9ca3af; }
+.doc-card-row dd { font-weight: 600; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.doc-card-chip {
+  display: inline-block;
+  padding: 0.4mm 1.8mm;
+  background: #f1f5f9;
+  border-radius: 999px;
+  color: #475569;
+  font-family: ui-monospace, "Courier New", monospace;
+  font-size: 5.8pt;
+  font-weight: 700;
+}
+
+.doc-card-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5mm;
+  padding: 1.2mm 2.5mm 1.8mm;
+}
+.doc-card-sign { text-align: center; }
+.doc-card-sign img { max-height: 5mm; max-width: 20mm; object-fit: contain; display: block; margin: 0 auto; }
+.doc-card-sign span {
+  display: block;
+  border-top: 0.2mm solid #9ca3af;
+  color: #6b7280;
+  font-size: 5pt;
+  padding-top: 0.3mm;
+}
+.doc-card-strip {
+  padding: 1mm 2.5mm;
+  background: var(--doc-accent);
+  color: #fff;
+  font-size: 5.2pt;
+  text-align: center;
+  line-height: 1.3;
+}
+.doc-card-terms { padding: 2mm 2.5mm; color: #4b5563; font-size: 5.2pt; line-height: 1.35; }
+.doc-card-stamp { position: absolute; right: 2mm; bottom: 7mm; width: 14mm; opacity: 0.8; }
+
+/* ---------------------------------------------------------------- printing */
+@media print {
+  /* A sheet IS the page. The frame and the drop shadow are screen furniture,
+     and a page margin would stack with the sheet's own padding. */
+  .doc-preview { overflow: visible !important; padding: 0 !important; }
+  .doc-preview .doc-sheet,
+  .doc-sheet {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* A forced break on the LAST sheet emits a blank final page. */
+  .doc-break:last-child { break-after: auto; page-break-after: auto; }
+
+  .doc-card { break-inside: avoid; page-break-inside: avoid; }
+  .doc-card-grid { gap: 4mm !important; }
+}

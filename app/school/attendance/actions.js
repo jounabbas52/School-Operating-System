@@ -3,6 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { MARK_IDS, STAFF_MARK_IDS, safeDate } from '@/lib/attendance-options'
+import { dateLabel } from '@/lib/operations-options'
+import {
+  PHONE_COLUMNS,
+  autoSend,
+  recipientsFrom,
+  schoolName,
+} from '@/lib/whatsapp/auto-send'
 
 // Authority is RLS. attendance and staff_attendance carry the standard tenant
 // policy set, so a caller without attendance.write gets an error or a zero-row
@@ -90,8 +97,46 @@ export async function saveAttendance(_prev, formData) {
 
   if (error) return { error: pgMessage(error) }
 
+  // ------------------------------------------------------ absence alerts
+  //
+  // AFTER the register is safely written, never before: a parent must not
+  // be told their child was absent by a save that then failed.
+  //
+  // Nothing here can fail the register. autoSend() swallows its own
+  // errors, and every gate -- is WhatsApp on, is the phone linked, is this
+  // event wanted, is there a template -- lives in the database, because
+  // the teacher saving this holds attendance.write and not whatsapp.write.
+  const absentIds = ids.filter((_, i) => marks[i] === 'absent')
+  let notified = 0
+
+  if (absentIds.length) {
+    const { data: students } = await supabase
+      .from('students')
+      .select(`id, first_name, last_name, ${PHONE_COLUMNS}, classes:current_class_id(name)`)
+      .eq('school_id', schoolId)
+      .in('id', absentIds)
+
+    const school = await schoolName(supabase, schoolId)
+
+    const result = await autoSend(
+      supabase,
+      'absence',
+      recipientsFrom(students, (s) => ({
+        student_name: [s.first_name, s.last_name].filter(Boolean).join(' '),
+        class_name: s.classes?.name ?? '',
+        date: dateLabel(date),
+        attendance_status: 'Absent',
+        school_name: school,
+      }))
+    )
+    notified = result.queued
+  }
+
   revalidateAll()
-  return ok(`Attendance saved for ${rows.length} student${rows.length === 1 ? '' : 's'}.`)
+  return ok(
+    `Attendance saved for ${rows.length} student${rows.length === 1 ? '' : 's'}.` +
+      (notified ? ` ${notified} parent${notified === 1 ? '' : 's'} notified on WhatsApp.` : '')
+  )
 }
 
 /* ===================================================== staff attendance */

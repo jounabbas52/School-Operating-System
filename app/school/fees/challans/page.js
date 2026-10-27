@@ -18,6 +18,7 @@ import {
   studentName,
 } from '@/lib/fee-options'
 import { deleteChallan } from '../actions'
+import { feePayers } from '../payers'
 import PaymentPanel from '../collect/payment-panel'
 
 export const metadata = { title: 'View Challans' }
@@ -30,6 +31,7 @@ export default async function ChallansPage({ searchParams }) {
   const statusFilter = params?.status ?? ''
 
   const { schoolId, permissions, supabase } = await getSchoolContext()
+  const payers = await feePayers(supabase, schoolId)
   const canWrite = permissions.has('fees.write')
 
   const { data: classes } = await supabase
@@ -98,6 +100,21 @@ export default async function ChallansPage({ searchParams }) {
 
   const filtered = Boolean(q || classFilter || typeFilter || statusFilter)
 
+  // "Print these" has to mean the rows on screen, which is why it carries the
+  // filters rather than the ids: a class of forty would put forty UUIDs in
+  // the URL, past what some proxies will forward. The free-text search is the
+  // exception -- it is applied here in JS, not in the query -- so when
+  // somebody has typed one, the ids are sent after all.
+  const printParams = new URLSearchParams()
+  if (q) {
+    printParams.set('ids', challans.slice(0, 200).map((c) => c.id).join(','))
+  } else {
+    if (classFilter) printParams.set('class', classFilter)
+    if (typeFilter) printParams.set('type', typeFilter)
+    if (statusFilter) printParams.set('status', statusFilter)
+  }
+  const printHref = `/school/fees/challans/print?${printParams.toString()}`
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -134,6 +151,11 @@ export default async function ChallansPage({ searchParams }) {
             filename="challans"
             title="Fee Challans"
           />
+          {challans.length > 0 && (
+            <Link href={printHref} className="btn btn-ghost">
+              Print {challans.length} challan{challans.length === 1 ? '' : 's'}
+            </Link>
+          )}
           {canWrite && (
             <Link href="/school/fees/challans/create" className="btn btn-primary">
               + Create Challan
@@ -301,6 +323,13 @@ export default async function ChallansPage({ searchParams }) {
                   <td>
                     <div className="flex items-center justify-end gap-1.5">
                       <Link
+                        href={`/school/fees/challans/print?id=${c.id}`}
+                        className="btn btn-ghost !px-2.5 !py-1"
+                        title={`Print ${c.challan_number ?? 'this challan'}`}
+                      >
+                        Print
+                      </Link>
+                      <Link
                         href={`/school/fees/student?student=${c.student_id}`}
                         className="btn btn-ghost !px-2.5 !py-1"
                       >
@@ -310,14 +339,8 @@ export default async function ChallansPage({ searchParams }) {
                         <>
                           {c.state !== 'paid' && c.state !== 'cancelled' && (
                             <PaymentPanel
-                              challanId={c.id}
-                              challans={[
-                                {
-                                  id: c.id,
-                                  label: `${c.challan_number ?? 'Challan'} · ${studentName(c.students)}`,
-                                  outstanding: remaining(c),
-                                },
-                              ]}
+                              students={payers}
+                              studentId={c.student_id}
                               trigger={{
                                 label: 'Collect',
                                 className: 'btn btn-primary !px-2.5 !py-1',

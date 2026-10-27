@@ -271,6 +271,13 @@ export default async function ExpensesPage({ searchParams }) {
                   </td>
                   <td>
                     <div className="flex items-center justify-end gap-1.5">
+                      <Link
+                        href={`/school/payroll/expenses/print?id=${e.id}`}
+                        className="btn btn-ghost !px-2.5 !py-1"
+                        title={`Print voucher ${e.voucher_no ?? ''}`}
+                      >
+                        Voucher
+                      </Link>
                       {canWrite ? (
                         <>
                           {e.status === 'pending' && (

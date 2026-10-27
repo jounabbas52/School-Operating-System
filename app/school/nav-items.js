@@ -23,63 +23,64 @@
 // `built: false` means the school has the module but the screen does not
 // exist yet. Those render dimmed rather than hidden, so the sidebar stays
 // honest about what the school is paying for.
+//
+// ---------------------------------------------------------------------------
+// THE ORDER: how often somebody touches it, not how the schema was built
+// ---------------------------------------------------------------------------
+//
+// Top of the list is what the office opens every single day -- the roll, the
+// register, the fee counter. Below that, work that comes round each term: the
+// timetable, the date sheet, exams, payroll. Then the services the school runs
+// alongside teaching. Then reporting.
+//
+// Everything that is configured ONCE and then left alone sits at the bottom,
+// together: Academic Setup, School Settings, Users & Access, Audit Logs.
+// Sessions and Grade Levels used to be the second thing in the sidebar, above
+// the screens people live in -- a year's worth of setup put in front of a
+// clerk who just wanted to take money for a challan.
+//
+// ---------------------------------------------------------------------------
+// THE NAMES
+// ---------------------------------------------------------------------------
+//
+// A child is read directly beneath its group heading, so it does not repeat
+// the group: "Fees > Overview", not "Fees > Fee Overview". The exception is a
+// word that stops being unambiguous once it is flattened into the per-person
+// access sheet, where no heading sits above it -- "Exam Results", "Test
+// Results" and "Payroll Settings" keep their first word for that reason.
+//
+// ---------------------------------------------------------------------------
+// RENAMING A GROUP IS NOT COSMETIC
+// ---------------------------------------------------------------------------
+//
+// lib/access.js slugs a group's label into the key stored in
+// page_catalog.module, and has_permission() joins user_module_access on
+// exactly that value. Change a group label here and you must change the
+// matching seed rows in supabase/migrations/026_simple_access.sql (and the
+// latest sidebar migration), or everybody's module switch points at a group
+// that no longer exists and every page under it goes dark.
 export const NAV = [
   // No permission: the dashboard is the landing page for everybody who has a
   // school at all, and shows only what its own queries return.
   { label: 'Dashboard', href: '/school', module: 'core', icon: 'grid', built: true },
 
+  /* ====================================================== every day ====== */
 
-  {
-    label: 'System Setup',
-    module: 'academics',
-    icon: 'layers',
-    children: [
-      { label: 'Sessions', href: '/school/academics/sessions', built: true, permission: 'academics.write' },
-      { label: 'Classes', href: '/school/academics/classes', built: true, permission: 'academics.write' },
-      { label: 'Sections', href: '/school/academics/sections', built: true, permission: 'academics.write' },
-      { label: 'Grade Levels', href: '/school/academics/grade-levels', built: true, permission: 'academics.write' },
-      { label: 'Subjects', href: '/school/academics/subjects', built: true, permission: 'academics.write' },
-    ],
-  },
   {
     label: 'Students',
     module: 'students',
     icon: 'users',
     children: [
-      { label: 'Active Students', href: '/school/students', built: true, permission: 'students.read' },
+      // "Current" and "Former" rather than "Active" and "Old": the roll splits
+      // on whether somebody still studies here, and "Old Students" reads like
+      // a remark about their age.
+      { label: 'Current Students', href: '/school/students', built: true, permission: 'students.read' },
       { label: 'Admission Register', href: '/school/students/register', built: true, permission: 'students.read' },
-      { label: 'Promotion', href: '/school/students/promotion', built: true, permission: 'students.write' },
-      { label: 'Old Students', href: '/school/students/old', built: true, permission: 'students.read' },
-      { label: 'Student Reports', href: '/school/students/reports', built: true, permission: 'students.read' },
-      { label: 'Certificates', href: '/school/students/certificates', built: true, permission: 'students.read' },
+      { label: 'Promotions', href: '/school/students/promotion', built: true, permission: 'students.write' },
+      { label: 'Former Students', href: '/school/students/old', built: true, permission: 'students.read' },
       { label: 'ID Cards', href: '/school/students/id-cards', built: true, permission: 'students.read' },
-    ],
-  },
-  {
-    label: 'Teachers',
-    href: '/school/teachers',
-    module: 'staff',
-    icon: 'user',
-    built: true,
-    permission: 'staff.read',
-  },
-  {
-    label: 'HR / Staff',
-    module: 'staff',
-    icon: 'users',
-    children: [
-      { label: 'All Staff', href: '/school/hr', built: true, permission: 'staff.read' },
-      // Leave lives behind its own module: the 'hr' permissions are dead for a
-      // school that has not bought Leave Management, so the link would open a
-      // screen RLS refuses to fill.
-      {
-        label: 'Leave Management',
-        href: '/school/hr/leave',
-        built: true,
-        module: 'hr',
-        permission: 'hr.read',
-      },
-      { label: 'Staff Documents', href: '/school/hr/documents', built: true, permission: 'staff.read' },
+      { label: 'Certificates', href: '/school/students/certificates', built: true, permission: 'students.read' },
+      { label: 'Reports', href: '/school/students/reports', built: true, permission: 'students.read' },
     ],
   },
   {
@@ -97,6 +98,28 @@ export const NAV = [
       { label: 'Reports', href: '/school/attendance/reports', built: true, permission: 'attendance.read' },
     ],
   },
+  {
+    // Plural, like Students and Reports. Overview stays first so the group
+    // opens the way Transport and Library do, with Collect Fee -- the counter's
+    // screen, opened more than anything else here -- directly under it.
+    label: 'Fees',
+    module: 'fees',
+    icon: 'rupee',
+    children: [
+      { label: 'Overview', href: '/school/fees', built: true, permission: 'fees.read' },
+      { label: 'Collect Fee', href: '/school/fees/collect', built: true, permission: 'fees.read' },
+      // One student's whole fee history, which is a ledger. It was called
+      // "Student Fee Search", after the box you type into.
+      { label: 'Student Ledger', href: '/school/fees/student', built: true, permission: 'fees.read' },
+      { label: 'Challans', href: '/school/fees/challans', built: true, permission: 'fees.read' },
+      { label: 'Create Challan', href: '/school/fees/challans/create', built: true, permission: 'fees.write' },
+      { label: 'Fee Policy', href: '/school/fees/policy', built: true, permission: 'fees.read' },
+      { label: 'Reports', href: '/school/fees/reports', built: true, permission: 'fees.read' },
+    ],
+  },
+
+  /* ======================================================= each term ===== */
+
   // Periods is an in-page tab, not a sidebar entry -- it is the same screen's
   // setup half rather than a second destination.
   {
@@ -107,23 +130,29 @@ export const NAV = [
     built: true,
     permission: 'academics.write',
   },
-  // Date Sheet is its own destination rather than a child of Examination: a
-  // date sheet is typed up by the office, routinely before the exam record
-  // exists, and burying it under Exams hid it from the people who write it.
+  // Date Sheet stays out of Examination, and above it. A date sheet is typed
+  // up by the office, routinely before the exam record exists; buried under
+  // Exams it was hidden from the people who write it.
+  //
+  // A group now, because the roll-number slips printed from that same date
+  // sheet were a real screen reachable only by a button on another page --
+  // which also meant nobody could be granted, or refused, that page on their
+  // own access sheet.
   {
     label: 'Date Sheet',
-    href: '/school/datesheet',
     module: 'exams',
     icon: 'clipboard',
-    built: true,
-    permission: 'exams.read',
+    children: [
+      { label: 'Exam Schedule', href: '/school/datesheet', built: true, permission: 'exams.read' },
+      { label: 'Roll No. Slips', href: '/school/datesheet/slips', built: true, permission: 'exams.read' },
+    ],
   },
   {
     label: 'Examination',
     module: 'exams',
     icon: 'award',
     children: [
-      { label: 'All Exams', href: '/school/exams', built: true, permission: 'exams.read' },
+      { label: 'Exams', href: '/school/exams', built: true, permission: 'exams.read' },
       { label: 'Exam Results', href: '/school/exams/results', built: true, permission: 'exams.read' },
       // Tests carry their own module. A school may buy Exams without Tests,
       // and has_permission('tests.read') is dead without it.
@@ -137,18 +166,31 @@ export const NAV = [
       },
     ],
   },
+
+  /* ========================================================== people ===== */
+
+  // Teachers was a top-level entry of its own, sitting next to a group called
+  // "HR / Staff" that did not contain it -- so the people a school manages most
+  // were outside the place you go to manage people. First child here, and the
+  // group keeps the word in its heading so it stays findable while collapsed.
   {
-    label: 'Fee',
-    module: 'fees',
-    icon: 'rupee',
+    label: 'Teachers & Staff',
+    module: 'staff',
+    icon: 'users',
     children: [
-      { label: 'Fee Overview', href: '/school/fees', built: true, permission: 'fees.read' },
-      { label: 'Student Fee Search', href: '/school/fees/student', built: true, permission: 'fees.read' },
-      { label: 'Collect Fee', href: '/school/fees/collect', built: true, permission: 'fees.read' },
-      { label: 'View Challans', href: '/school/fees/challans', built: true, permission: 'fees.read' },
-      { label: 'Create Challan', href: '/school/fees/challans/create', built: true, permission: 'fees.write' },
-      { label: 'Fee Policy', href: '/school/fees/policy', built: true, permission: 'fees.read' },
-      { label: 'Reports', href: '/school/fees/reports', built: true, permission: 'fees.read' },
+      { label: 'Teachers', href: '/school/teachers', built: true, permission: 'staff.read' },
+      { label: 'All Staff', href: '/school/hr', built: true, permission: 'staff.read' },
+      // Leave lives behind its own module: the 'hr' permissions are dead for a
+      // school that has not bought Leave Management, so the link would open a
+      // screen RLS refuses to fill.
+      {
+        label: 'Leave Requests',
+        href: '/school/hr/leave',
+        built: true,
+        module: 'hr',
+        permission: 'hr.read',
+      },
+      { label: 'Documents', href: '/school/hr/documents', built: true, permission: 'staff.read' },
     ],
   },
   {
@@ -158,21 +200,26 @@ export const NAV = [
     children: [
       { label: 'Salary Structures', href: '/school/payroll', built: true, permission: 'payroll.read' },
       { label: 'Staff Salaries', href: '/school/payroll/salaries', built: true, permission: 'payroll.read' },
-      { label: 'Payroll Run', href: '/school/payroll/run', built: true, permission: 'payroll.read' },
+      // "Payroll Run" stuttered under a heading already reading Payroll, and
+      // the thing it names is the month's run.
+      { label: 'Monthly Run', href: '/school/payroll/run', built: true, permission: 'payroll.read' },
       { label: 'Salary Slips', href: '/school/payroll/slips', built: true, permission: 'payroll.read' },
-      { label: 'Reports', href: '/school/payroll/reports', built: true, permission: 'payroll.read' },
       // Expenses are gated on accounts.*, which is where schema.sql put the
       // table. The screen sits under Payroll; the permission does not move.
       {
-        label: 'Other Expenses',
+        label: 'Expenses',
         href: '/school/payroll/expenses',
         built: true,
         module: 'accounts',
         permission: 'accounts.read',
       },
+      { label: 'Reports', href: '/school/payroll/reports', built: true, permission: 'payroll.read' },
       { label: 'Payroll Settings', href: '/school/payroll/settings', built: true, permission: 'payroll.write' },
     ],
   },
+
+  /* ======================================================== services ===== */
+
   {
     label: 'Transport',
     module: 'transport',
@@ -209,9 +256,12 @@ export const NAV = [
     href: '/school/admissions',
     module: 'admissions',
     icon: 'inbox',
-    built: false,
+    built: true,
     permission: 'admissions.read',
   },
+
+  /* ======================================================= reporting ===== */
+
   {
     label: 'Reports',
     href: '/school/reports',
@@ -220,13 +270,50 @@ export const NAV = [
     built: true,
     permission: 'reports.read',
   },
+
+  /* ===================================== set up once, then left alone ==== */
+
   {
-    label: 'Settings',
-    href: '/school/settings',
+    // Was "System Setup", which described nothing -- every screen in the app
+    // is part of the system. This is the academic skeleton: the year, the
+    // grades, the classes under them, the subjects taught.
+    //
+    // The children are in the order they have to be created: a class needs a
+    // grade level, a section needs a class. Grade Levels used to come fourth,
+    // after the two things that depend on it.
+    label: 'Academic Setup',
+    module: 'academics',
+    icon: 'layers',
+    children: [
+      { label: 'Sessions', href: '/school/academics/sessions', built: true, permission: 'academics.write' },
+      { label: 'Grade Levels', href: '/school/academics/grade-levels', built: true, permission: 'academics.write' },
+      { label: 'Classes', href: '/school/academics/classes', built: true, permission: 'academics.write' },
+      { label: 'Sections', href: '/school/academics/sections', built: true, permission: 'academics.write' },
+      { label: 'Subjects', href: '/school/academics/subjects', built: true, permission: 'academics.write' },
+    ],
+  },
+  {
+    // "School" in front of it because Payroll has settings of its own, and on
+    // a flat access sheet the two were the same word.
+    //
+    // A GROUP now, because WhatsApp lives inside Settings rather than in a
+    // Communication section of its own. The child carries its own module
+    // ('whatsapp', what the school bought) and its own permission, while the
+    // GROUP label is what lib/access.js slugs into page_catalog.module --
+    // so both pages sit under the one 'school-settings' switch.
+    label: 'School Settings',
     module: 'core',
     icon: 'cog',
-    built: true,
-    permission: 'core.settings.write',
+    children: [
+      { label: 'School Settings', href: '/school/settings', built: true, permission: 'core.settings.write' },
+      {
+        label: 'WhatsApp',
+        href: '/school/settings/whatsapp',
+        built: true,
+        module: 'whatsapp',
+        permission: 'whatsapp.read',
+      },
+    ],
   },
   // One entry, not a group: there is no Roles screen any more. Access is set
   // per person, on that person's own page.

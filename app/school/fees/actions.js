@@ -2,24 +2,28 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { FEE_METHOD_IDS, FEE_TYPE_IDS, POLICY_COMPONENTS } from '@/lib/fee-options'
+import { dateLabel } from '@/lib/operations-options'
 import {
-  ALL_MONTHS,
-  FEE_METHOD_IDS,
-  FEE_TYPE_IDS,
-  POLICY_COMPONENTS,
-  componentsForMonth,
-  monthKey,
-} from '@/lib/fee-options'
+  PHONE_COLUMNS,
+  autoSend,
+  recipientsFrom,
+  schoolName,
+} from '@/lib/whatsapp/auto-send'
 
-// Authority is RLS. fee_policies, fee_challans and fee_payments all carry the
-// standard tenant policy set against fees.read / fees.write, so a caller
-// without the permission gets an error or a zero-row update rather than a
-// silent success. What follows is input shaping and money arithmetic.
+// Authority is RLS. fee_policies, fee_challans, fee_challan_items,
+// fee_payments and fee_payment_allocations all carry the standard tenant
+// policy set against fees.read / fees.write, so a caller without the
+// permission gets an error or a zero-row update rather than a silent success.
 //
-// One rule runs through this file: nothing recomputes a challan that has
-// already been issued. A policy edited in March must not rewrite January's
-// bill, so the generator reads the policy once, writes the figures onto the
-// challan, and never looks back.
+// Money arithmetic is not done here either, and that is the point of this
+// file's shape. Raising a bill and taking a payment each touch several tables
+// -- a challan and its lines, a payment and its allocations and the ledger --
+// and a half-finished one of those is a wrong balance on a parent's receipt.
+// So each is a single database function called once: generate_fee_vouchers,
+// raise_fee_voucher, raise_manual_voucher, generate_class_vouchers,
+// collect_fee. They either happen or they do not. What is left here is
+// reading the form, naming the mistakes in it, and saying what happened.
 
 const PATHS = [
   '/school/fees',
@@ -73,6 +77,7 @@ const num = (v) => {
 }
 const money = (v) => num(v) ?? 0
 const ok = (message) => ({ ok: message, at: Date.now() })
+const rupees = (n) => `Rs ${Math.round(Number(n) || 0).toLocaleString('en-PK')}`
 
 // Checkbox groups post one value per checked box, so getAll is the whole read.
 const monthList = (formData, name) => {
@@ -155,6 +160,11 @@ export async function togglePolicy(formData) {
 
 /* ================================================================ challan */
 
+// One typed-in bill: a fine, a trip, a class whose policy is not set up yet.
+// raise_manual_voucher() mints the number, writes the header and its line
+// together, stamps the balance the family was already carrying, and spends any
+// credit they had -- in one transaction. Doing that over four round trips from
+// here is what used to leave half-written bills behind when a step failed.
 export async function saveChallan(_prev, formData) {
   const id = text(formData.get('id'))
   const studentId = text(formData.get('student_id'))
@@ -170,60 +180,69 @@ export async function saveChallan(_prev, formData) {
   const { supabase, schoolId } = await ctx()
   if (!schoolId) return { error: 'No active school.' }
 
-  const { data: student } = await supabase
-    .from('students')
-    .select('current_class_id, current_section_id')
-    .eq('id', studentId)
-    .maybeSingle()
-
-  if (!student) return { error: 'That student no longer exists.' }
-
-  const payload = {
-    school_id: schoolId,
-    student_id: studentId,
-    // Copied off the student at issue time, not joined. A student promoted in
-    // July must not drag last year's challans into their new class.
-    class_id: student.current_class_id,
-    section_id: student.current_section_id,
-    fee_type: feeType,
-    amount,
-    late_fee: money(formData.get('late_fee')),
-    discount: money(formData.get('discount')),
-    due_date: dueDate,
-    period_month: text(formData.get('period_month')),
-    description: text(formData.get('description')),
-  }
+  const lateFee = money(formData.get('late_fee'))
+  const discount = money(formData.get('discount'))
+  const description = text(formData.get('description'))
+  const period = text(formData.get('period_month'))
 
   if (id) {
-    // net_amount and total_amount are written by the database trigger, so
-    // they are deliberately absent here.
-    const { error } = await supabase.from('fee_challans').update(payload).eq('id', id)
-    if (error) return { error: pgMessage(error) }
-  } else {
-    const { data: challanNumber } = await supabase.rpc('next_challan_number', {
-      p_school: schoolId,
-      p_prefix: 'CH',
-    })
+    // An edit writes the line, not the header total: fee_challan_from_items()
+    // sums the lines into the header, so setting amount here as well would
+    // give one figure two authors and let them drift apart.
+    const { data: items } = await supabase
+      .from('fee_challan_items')
+      .select('id')
+      .eq('challan_id', id)
+      .eq('is_deleted', false)
 
-    const { error } = await supabase
-      .from('fee_challans')
-      .insert({ ...payload, challan_number: challanNumber })
+    const single = items?.length === 1
+
+    if (single) {
+      const line = { amount }
+      if (description) line.description = description
+      const { error } = await supabase.from('fee_challan_items').update(line).eq('id', items[0].id)
+      if (error) return { error: pgMessage(error) }
+    }
+
+    const header = { fee_type: feeType, late_fee: lateFee, discount, due_date: dueDate, description }
+    // A challan with no lines predates this module, or carries several lines
+    // that no single-amount form can speak for. In the first case the header
+    // still holds its own figure and has to be written here.
+    if (!items?.length) header.amount = amount
+
+    const { error } = await supabase.from('fee_challans').update(header).eq('id', id)
     if (error) return { error: pgMessage(error) }
+
+    revalidateAll()
+    return ok(items?.length > 1 ? 'Challan details updated. Line amounts were left alone.' : 'Challan updated.')
+  }
+
+  const { data: challanId, error } = await supabase.rpc('raise_manual_voucher', {
+    p_student: studentId,
+    p_period: period,
+    p_fee_type: feeType,
+    p_amount: amount,
+    p_due_date: dueDate,
+    p_description: description,
+    p_late_fee: lateFee,
+    p_discount: discount,
+  })
+
+  if (error) return { error: pgMessage(error) }
+  if (!challanId) {
+    return { error: 'That student already has a challan for this month and fee type.' }
   }
 
   revalidateAll()
-  return ok(id ? 'Challan updated.' : 'Challan generated.')
+  return ok('Challan generated.')
 }
 
-// A whole class, one press. The fee comes from the student's own final_fee
-// where they have one, so a sibling discount is honoured without anyone
-// editing forty challans afterwards.
+// A whole class, one press, for schools that bill each student's own fee
+// figure rather than a class policy.
 export async function generateClassChallans(_prev, formData) {
   const classId = text(formData.get('class_id'))
   const feeType = text(formData.get('fee_type')) ?? 'monthly'
   const dueDate = text(formData.get('due_date'))
-  const periodMonth = text(formData.get('period_month'))
-  const fallback = money(formData.get('amount'))
 
   if (!classId) return { error: 'Choose a class.' }
   if (!dueDate) return { error: 'Choose a due date.' }
@@ -232,90 +251,41 @@ export async function generateClassChallans(_prev, formData) {
   const { supabase, schoolId } = await ctx()
   if (!schoolId) return { error: 'No active school.' }
 
-  const sectionId = text(formData.get('section_id'))
-
-  let studentQuery = supabase
-    .from('students')
-    .select('id, first_name, last_name, final_fee, base_fee, current_class_id, current_section_id')
-    .eq('school_id', schoolId)
-    .eq('is_deleted', false)
-    .eq('status', 'active')
-    .eq('current_class_id', classId)
-
-  if (sectionId) studentQuery = studentQuery.eq('current_section_id', sectionId)
-
-  const { data: students, error: readError } = await studentQuery
-  if (readError) return { error: pgMessage(readError) }
-  if (!students?.length) return { error: 'No active students match that class and section.' }
-
-  const rows = []
-  const skipped = []
-
-  for (const s of students) {
-    const amount = Number(s.final_fee) || Number(s.base_fee) || fallback
-    // A zero-rupee challan is noise in the collection list, not a bill.
-    if (amount <= 0) {
-      skipped.push([s.first_name, s.last_name].filter(Boolean).join(' '))
-      continue
-    }
-
-    rows.push({
-      school_id: schoolId,
-      student_id: s.id,
-      class_id: s.current_class_id,
-      section_id: s.current_section_id,
-      fee_type: feeType,
-      amount,
-      late_fee: 0,
-      discount: 0,
-      due_date: dueDate,
-      period_month: periodMonth,
-      description: text(formData.get('description')),
-    })
-  }
-
-  if (!rows.length) {
-    return { error: 'Nobody in that class has a fee on file. Set fees on the students first.' }
-  }
-
-  // Numbers are minted one at a time because next_challan_number() reads the
-  // table's current maximum; issuing them in a single batch would hand every
-  // row the same number and fail the unique constraint.
-  for (const row of rows) {
-    const { data: challanNumber } = await supabase.rpc('next_challan_number', {
-      p_school: schoolId,
-      p_prefix: 'CH',
-    })
-    row.challan_number = challanNumber
-  }
-
-  // ignoreDuplicates so re-running a month tops up the students who were
-  // added since, rather than failing on the ones already billed.
-  const { data: inserted, error } = await supabase
-    .from('fee_challans')
-    .upsert(rows, {
-      onConflict: 'school_id,student_id,period_month,fee_type',
-      ignoreDuplicates: true,
-    })
-    .select('id')
+  const { data, error } = await supabase.rpc('generate_class_vouchers', {
+    p_class: classId,
+    p_section: text(formData.get('section_id')),
+    p_period: text(formData.get('period_month')),
+    p_fee_type: feeType,
+    p_due_date: dueDate,
+    p_fallback: money(formData.get('amount')),
+    p_description: text(formData.get('description')),
+  })
 
   if (error) return { error: pgMessage(error) }
 
-  const made = inserted?.length ?? 0
-  const already = rows.length - made
+  const made = Number(data?.made) || 0
+  const already = Number(data?.already) || 0
+  const skipped = Number(data?.skipped) || 0
+
+  if (!made && !already && skipped) {
+    return { error: 'Nobody in that class has a fee on file. Set fees on the students first.' }
+  }
+  if (!made && !already && !skipped) {
+    return { error: 'No active students match that class and section.' }
+  }
 
   revalidateAll()
   return ok(
     `${made} challan${made === 1 ? '' : 's'} generated` +
       (already > 0 ? ` · ${already} already existed` : '') +
-      (skipped.length ? ` · ${skipped.length} skipped with no fee on file` : '') +
+      (skipped > 0 ? ` · ${skipped} skipped with no fee on file` : '') +
       '.'
   )
 }
 
-// Every student in the school, billed from their class's active policy. This
-// is the Monthly Batch mode: the policy says what a class owes in a given
-// month, so one press covers the school.
+// The monthly run. Every active student, billed from their class's policy and
+// their own fee plan: a quarterly student gets one voucher covering three
+// months in the month their quarter starts, and nothing in the other two.
 export async function generateMonthlyBatch(_prev, formData) {
   const year = num(formData.get('year'))
   const month = num(formData.get('month'))
@@ -328,93 +298,62 @@ export async function generateMonthlyBatch(_prev, formData) {
   const { supabase, schoolId } = await ctx()
   if (!schoolId) return { error: 'No active school.' }
 
-  const period = monthKey(year, month)
-
-  const [{ data: policies }, { data: students }] = await Promise.all([
-    supabase
-      .from('fee_policies')
-      .select('*')
-      .eq('school_id', schoolId)
-      .eq('is_deleted', false)
-      .eq('status', 'active'),
-    supabase
-      .from('students')
-      .select('id, final_fee, base_fee, current_class_id, current_section_id')
-      .eq('school_id', schoolId)
-      .eq('is_deleted', false)
-      .eq('status', 'active'),
-  ])
-
-  if (!policies?.length) {
-    return { error: 'No active fee policy. Set one up under Fees → Fee Policy first.' }
-  }
-  if (!students?.length) return { error: 'There are no active students to bill.' }
-
-  const policyByClass = new Map(policies.filter((p) => p.class_id).map((p) => [p.class_id, p]))
-
-  const rows = []
-  for (const s of students) {
-    const policy = policyByClass.get(s.current_class_id)
-    if (!policy) continue
-
-    for (const component of componentsForMonth(policy, month)) {
-      // The student's own tuition figure wins over the policy's: that is
-      // where a scholarship or a sibling discount lives.
-      const amount =
-        component.feeType === 'monthly'
-          ? Number(s.final_fee) || Number(s.base_fee) || component.amount
-          : component.amount
-
-      if (amount <= 0) continue
-
-      rows.push({
-        school_id: schoolId,
-        student_id: s.id,
-        class_id: s.current_class_id,
-        section_id: s.current_section_id,
-        policy_id: policy.id,
-        fee_type: component.feeType,
-        amount,
-        late_fee: 0,
-        discount: 0,
-        due_date: dueDate,
-        period_month: period,
-        description: component.label,
-      })
-    }
-  }
-
-  if (!rows.length) {
-    return { error: 'No policy bills anything in that month. Check the policy month selections.' }
-  }
-
-  for (const row of rows) {
-    const { data: challanNumber } = await supabase.rpc('next_challan_number', {
-      p_school: schoolId,
-      p_prefix: 'CH',
-    })
-    row.challan_number = challanNumber
-  }
-
-  const { data: inserted, error } = await supabase
-    .from('fee_challans')
-    .upsert(rows, {
-      onConflict: 'school_id,student_id,period_month,fee_type',
-      ignoreDuplicates: true,
-    })
-    .select('id')
+  const { data, error } = await supabase.rpc('generate_fee_vouchers', {
+    p_year: year,
+    p_month: month,
+    p_due_date: dueDate,
+  })
 
   if (error) return { error: pgMessage(error) }
 
-  const made = inserted?.length ?? 0
-  const already = rows.length - made
+  const made = Number(data?.made) || 0
+  const skipped = Number(data?.skipped) || 0
+
+  if (!made && !skipped) {
+    return { error: 'No active fee policy bills anything in that month. Check Fees → Fee Policy.' }
+  }
 
   revalidateAll()
   return ok(
-    `${made} challan${made === 1 ? '' : 's'} generated` +
-      (already > 0 ? ` · ${already} already existed` : '') +
+    `${made} voucher${made === 1 ? '' : 's'} generated for ${data?.period ?? 'that month'}` +
+      (skipped > 0 ? ` · ${skipped} already billed or not due this month` : '') +
       '.'
   )
+}
+
+// Bill several months ahead on one voucher, for a family paying in advance.
+// One number, one due date, one piece of paper -- not five challans the parent
+// carries to the bank five times.
+export async function billAhead(_prev, formData) {
+  const studentId = text(formData.get('student_id'))
+  const from = text(formData.get('from_month'))
+  const months = num(formData.get('months')) ?? 1
+  const dueDate = text(formData.get('due_date'))
+
+  if (!studentId) return { error: 'Choose a student.' }
+  if (!from) return { error: 'Choose the month to start from.' }
+  if (months < 1 || months > 24) return { error: 'Choose between 1 and 24 months.' }
+
+  const { supabase, schoolId } = await ctx()
+  if (!schoolId) return { error: 'No active school.' }
+
+  const { data: challanId, error } = await supabase.rpc('raise_fee_voucher', {
+    p_student: studentId,
+    p_from: from,
+    p_months: months,
+    p_due_date: dueDate,
+    p_note: text(formData.get('note')),
+  })
+
+  if (error) return { error: pgMessage(error) }
+  if (!challanId) {
+    return {
+      error: 'Every month in that range is already billed, or the class has no active fee policy.',
+    }
+  }
+
+  revalidateAll()
+  return ok(`Voucher raised for ${months} month${months === 1 ? '' : 's'} from ${from.slice(0, 7)}.`)
 }
 
 export async function deleteChallan(formData) {
@@ -422,7 +361,7 @@ export async function deleteChallan(formData) {
   const { supabase } = await ctx()
 
   // Soft delete. Payments point here; a hard delete would take receipts with
-  // it.
+  // it. The ledger trigger removes the charge entry, so the balance drops.
   const { error } = await supabase
     .from('fee_challans')
     .update({ is_deleted: true, deleted_at: new Date().toISOString() })
@@ -443,70 +382,143 @@ export async function cancelChallan(formData) {
 
 /* ================================================================ payment */
 
-export async function recordPayment(_prev, formData) {
-  const challanId = text(formData.get('challan_id'))
-  const amount = money(formData.get('amount_paid'))
+// One payment, any number of bills. The cashier types what the parent handed
+// over; collect_fee() spreads it across the open challans oldest first, and
+// whatever is left over stays on the account as credit against the next bill.
+// That is the whole answer to "he wants to pay three pendings and two months
+// ahead, together": it is one amount and one receipt.
+//
+// A split posts matching split_challan / split_amount pairs to override the
+// oldest-first order -- the cashier deciding which bills this money clears.
+export async function collectFee(_prev, formData) {
+  const studentId = text(formData.get('student_id'))
+  const amount = money(formData.get('amount'))
   const method = text(formData.get('method')) ?? 'cash'
 
-  if (!challanId) return { error: 'Choose a challan.' }
+  if (!studentId) return { error: 'Choose a student.' }
   if (amount <= 0) return { error: 'Enter an amount greater than zero.' }
   if (!FEE_METHOD_IDS.includes(method)) return { error: 'Unknown payment method.' }
 
   const { supabase, schoolId } = await ctx()
   if (!schoolId) return { error: 'No active school.' }
 
+  const challanIds = formData.getAll('split_challan').map((v) => String(v))
+  const splitAmounts = formData.getAll('split_amount').map((v) => money(v))
+
+  let splits = null
+  if (challanIds.length) {
+    splits = challanIds
+      .map((challan_id, i) => ({ challan_id, amount: splitAmounts[i] ?? 0 }))
+      .filter((s) => s.challan_id && s.amount > 0)
+
+    const allocated = splits.reduce((sum, s) => sum + s.amount, 0)
+    // Allocating more than was handed over would show bills as paid with
+    // money nobody gave. Less is allowed: the remainder becomes credit.
+    if (allocated - amount > 0.005) {
+      return {
+        error: `You have split ${rupees(allocated)} of a ${rupees(amount)} payment. Reduce the split or raise the amount.`,
+      }
+    }
+    if (!splits.length) splits = null
+  }
+
+  const { data, error } = await supabase.rpc('collect_fee', {
+    p_student: studentId,
+    p_amount: amount,
+    p_method: method,
+    p_reference: text(formData.get('reference')),
+    p_paid_at: text(formData.get('paid_at')) ?? new Date().toISOString(),
+    p_notes: text(formData.get('notes')),
+    p_splits: splits,
+  })
+
+  if (error) return { error: pgMessage(error, 'payment') }
+
+  const cleared = Number(data?.challans) || 0
+  const credit = Number(data?.credit) || 0
+
+  // ------------------------------------------------------- the receipt
+  //
+  // AFTER the money is recorded, never before. A parent told "payment
+  // received" for a transaction that then failed is the worst possible
+  // version of this feature.
+  //
+  // Nothing here can fail the payment: autoSend() swallows its own errors,
+  // and whether a message goes at all is decided in the database, because
+  // the clerk on the counter holds fees.write and not whatsapp.write.
+  const { data: student } = await supabase
+    .from('students')
+    .select(`id, first_name, last_name, ${PHONE_COLUMNS}`)
+    .eq('school_id', schoolId)
+    .eq('id', studentId)
+    .maybeSingle()
+
+  const school = await schoolName(supabase, schoolId)
+
+  const sent = await autoSend(
+    supabase,
+    'fee_received',
+    recipientsFrom(student ? [student] : [], (s) => ({
+      student_name: [s.first_name, s.last_name].filter(Boolean).join(' '),
+      amount: rupees(amount),
+      date: dateLabel(new Date().toISOString().slice(0, 10)),
+      challan_number: data?.receipt_no ?? '',
+      school_name: school,
+    }))
+  )
+
+  revalidateAll()
+  return {
+    ...ok(
+      `${rupees(amount)} received · receipt ${data?.receipt_no}` +
+        (cleared ? ` · ${cleared} challan${cleared === 1 ? '' : 's'} settled` : '') +
+        (credit > 0 ? ` · ${rupees(credit)} held as advance` : '') +
+        '.' +
+        (sent.queued ? ' Receipt sent on WhatsApp.' : '')
+    ),
+    receipt: data?.receipt_no ?? null,
+  }
+}
+
+// Kept under its old name so any screen still posting a single challan keeps
+// working: a payment against one bill is just a split with one line.
+export async function recordPayment(_prev, formData) {
+  const challanId = text(formData.get('challan_id'))
+  if (!challanId) return collectFee(_prev, formData)
+
+  const amount = money(formData.get('amount_paid')) || money(formData.get('amount'))
+  const { supabase } = await ctx()
+
   const { data: challan } = await supabase
     .from('fee_challans')
-    .select('id, student_id, net_amount, total_amount, amount, paid_amount, status')
+    .select('student_id, status')
     .eq('id', challanId)
     .maybeSingle()
 
   if (!challan) return { error: 'That challan no longer exists.' }
   if (challan.status === 'cancelled') return { error: 'That challan has been cancelled.' }
 
-  const net = Number(challan.net_amount ?? challan.total_amount ?? challan.amount) || 0
-  const alreadyPaid = Number(challan.paid_amount) || 0
-  const outstanding = net - alreadyPaid
-
-  if (outstanding <= 0) return { error: 'That challan is already paid in full.' }
-  // Overpayment is almost always a typo, and the challan trigger would happily
-  // record it.
-  if (amount > outstanding) {
-    return { error: `That is more than the Rs ${Math.round(outstanding)} still outstanding.` }
+  const forwarded = new FormData()
+  forwarded.set('student_id', challan.student_id)
+  forwarded.set('amount', String(amount))
+  for (const key of ['method', 'reference', 'notes', 'paid_at']) {
+    const v = formData.get(key)
+    if (v != null) forwarded.set(key, v)
   }
+  forwarded.append('split_challan', challanId)
+  forwarded.append('split_amount', String(amount))
 
-  const { data: receiptNo } = await supabase.rpc('next_receipt_number', {
-    p_school: schoolId,
-    p_prefix: 'RC',
-  })
-
-  // paid_amount and status on the challan are written by the recalc trigger
-  // in schema.sql, not here -- two writers would drift.
-  const { error } = await supabase.from('fee_payments').insert({
-    school_id: schoolId,
-    challan_id: challanId,
-    student_id: challan.student_id,
-    amount_paid: amount,
-    method,
-    reference: text(formData.get('reference')),
-    receipt_no: receiptNo,
-    notes: text(formData.get('notes')),
-    paid_at: text(formData.get('paid_at')) ?? new Date().toISOString(),
-  })
-
-  if (error) return { error: pgMessage(error, 'payment') }
-
-  revalidateAll()
-  return ok(`Rs ${Math.round(amount).toLocaleString('en-PK')} received · receipt ${receiptNo}.`)
+  return collectFee(_prev, forwarded)
 }
 
 export async function deletePayment(formData) {
   const id = String(formData.get('id'))
   const { supabase } = await ctx()
 
-  // A hard delete, unusually: the recalc trigger fires on DELETE, so the
-  // challan's paid_amount corrects itself. A soft delete would leave the
-  // challan believing it had been paid.
+  // A hard delete, unusually: the allocation rows cascade, and the recalc and
+  // ledger triggers fire on DELETE, so every challan this money touched
+  // corrects itself. A soft delete would leave those challans believing they
+  // had been paid.
   const { error } = await supabase.from('fee_payments').delete().eq('id', id)
   if (error) throw new Error(pgMessage(error, 'payment'))
   revalidateAll()
@@ -517,6 +529,11 @@ export async function deletePayment(formData) {
 // Stamp the configured late fee onto everything overdue. Run from the
 // collection screen rather than on a schedule, so a school that waives fines
 // never accidentally charges one.
+//
+// Two modes, because schools genuinely do both: per day past a grace period,
+// or a flat charge for each month the bill stays unpaid. Either can be capped,
+// which matters on a five-month arrear -- an uncapped daily fine on a bill
+// from last January is larger than the fee itself.
 export async function applyLateFees(_prev, formData) {
   const period = text(formData.get('period_month'))
 
@@ -535,13 +552,22 @@ export async function applyLateFees(_prev, formData) {
     return { error: 'Late fees are switched off under Settings → Fee & Finance.' }
   }
 
+  const mode = config.late_fee_mode === 'per_month' ? 'per_month' : 'per_day'
   const perDay = Number(config.late_fee_per_day) || 0
+  const perMonth = Number(config.late_fee_per_month) || 0
   const grace = Number(config.grace_days) || 0
-  if (perDay <= 0) return { error: 'No late fee per day is configured.' }
+  const cap = Number(config.late_fee_cap) || 0
+
+  if (mode === 'per_day' && perDay <= 0) {
+    return { error: 'No late fee per day is configured under Settings → Fee & Finance.' }
+  }
+  if (mode === 'per_month' && perMonth <= 0) {
+    return { error: 'No late fee per month is configured under Settings → Fee & Finance.' }
+  }
 
   let query = supabase
     .from('fee_challans')
-    .select('id, due_date, late_fee, paid_amount, net_amount')
+    .select('id, due_date, late_fee, paid_amount, net_amount, amount')
     .eq('school_id', schoolId)
     .eq('is_deleted', false)
     .in('status', ['open', 'partial', 'overdue'])
@@ -556,13 +582,24 @@ export async function applyLateFees(_prev, formData) {
 
   for (const c of challans ?? []) {
     if (!c.due_date) continue
-    const overdueDays = Math.floor(
-      (today - Date.parse(`${c.due_date}T23:59:59Z`)) / 86400000
-    )
-    const chargeable = overdueDays - grace
-    if (chargeable <= 0) continue
 
-    const fee = chargeable * perDay
+    const due = Date.parse(`${c.due_date}T23:59:59Z`)
+    const overdueDays = Math.floor((today - due) / 86400000)
+
+    let fee = 0
+    if (mode === 'per_day') {
+      const chargeable = overdueDays - grace
+      if (chargeable <= 0) continue
+      fee = chargeable * perDay
+    } else {
+      // Whole months late, counted from the due date. One day past the due
+      // date is one month's fine -- that is what a flat monthly charge means.
+      const months = Math.floor((overdueDays - grace) / 30) + (overdueDays - grace > 0 ? 1 : 0)
+      if (months <= 0) continue
+      fee = months * perMonth
+    }
+
+    if (cap > 0) fee = Math.min(fee, cap)
     // Recomputed from the due date every run rather than added to, so running
     // this twice in one day does not double the fine.
     if (Number(c.late_fee) === fee) continue

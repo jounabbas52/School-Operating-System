@@ -1,0 +1,17 @@
+{
+  "name": "school-whatsapp-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Holds one linked WhatsApp session per school and sends on behalf of the school app.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@whiskeysockets/baileys": "6.7.24",
+    "qrcode": "^1.5.4",
+    "pino": "^9.5.0"
+  }
+}

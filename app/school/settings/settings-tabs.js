@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { Spinner } from '@/components/spinner'
@@ -7,6 +8,7 @@ import { useToast } from '@/components/toast'
 import { Select } from '@/components/combobox'
 import { PALETTES } from '@/lib/appearance'
 import { MONTHS } from '@/lib/fee-options'
+import DocumentsBlock from './documents-block'
 import {
   saveAcademicSettings,
   saveAppearanceSettings,
@@ -395,7 +397,14 @@ function Fees({ block, canWrite }) {
             ['Currency', block.currency_code ?? 'PKR'],
             ['Fee Frequency', block.fee_frequency ?? 'Monthly'],
             ['Grace Days', `${block.grace_days ?? 10} days`],
-            ['Late Fee/Day', `PKR ${block.late_fee_per_day ?? 0}`],
+            [
+              block.late_fee_mode === 'per_month' ? 'Late Fee/Month' : 'Late Fee/Day',
+              `PKR ${
+                block.late_fee_mode === 'per_month'
+                  ? (block.late_fee_per_month ?? 0)
+                  : (block.late_fee_per_day ?? 0)
+              }`,
+            ],
           ].map(([label, value]) => (
             <div key={label} className="card p-3.5">
               <p className="text-[0.65rem]" style={{ color: 'var(--muted)' }}>
@@ -473,8 +482,34 @@ function Fees({ block, canWrite }) {
               hint="Automatically flag unpaid challans"
               defaultChecked={block.auto_mark_overdue ?? true}
             />
+            <Switch
+              name="auto_generate_enabled"
+              label="Generate Challans Automatically"
+              hint="Bill every active student on the day below, without anyone pressing a button"
+              defaultChecked={block.auto_generate_enabled === 'true'}
+            />
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="Billing Day" hint="day of the month challans are raised">
+                <input
+                  name="auto_generate_day"
+                  type="number"
+                  min="1"
+                  max="28"
+                  defaultValue={block.auto_generate_day ?? 1}
+                  className="field"
+                />
+              </Field>
+              <Field label="Due Day" hint="day of the month a challan falls due">
+                <input
+                  name="due_day"
+                  type="number"
+                  min="1"
+                  max="28"
+                  defaultValue={block.due_day ?? 10}
+                  className="field"
+                />
+              </Field>
               <Field label="Grace Period" hint="days before late fee">
                 <input
                   name="grace_period"
@@ -484,12 +519,40 @@ function Fees({ block, canWrite }) {
                   className="field"
                 />
               </Field>
-              <Field label="Late Fee Per Day" hint="PKR">
+              <Field label="How the Fine is Charged" hint="per day, or flat per month">
+                <select
+                  name="late_fee_mode"
+                  defaultValue={block.late_fee_mode ?? 'per_day'}
+                  className="field"
+                >
+                  <option value="per_day">So much per day late</option>
+                  <option value="per_month">A flat amount per month late</option>
+                </select>
+              </Field>
+              <Field label="Late Fee Per Day" hint="PKR, used in per day mode">
                 <input
                   name="late_fee_per_day"
                   type="number"
                   min="0"
                   defaultValue={block.late_fee_per_day ?? 5}
+                  className="field"
+                />
+              </Field>
+              <Field label="Late Fee Per Month" hint="PKR, used in per month mode">
+                <input
+                  name="late_fee_per_month"
+                  type="number"
+                  min="0"
+                  defaultValue={block.late_fee_per_month ?? 0}
+                  className="field"
+                />
+              </Field>
+              <Field label="Maximum Fine Per Challan" hint="PKR, 0 for no limit">
+                <input
+                  name="late_fee_cap"
+                  type="number"
+                  min="0"
+                  defaultValue={block.late_fee_cap ?? 0}
                   className="field"
                 />
               </Field>
@@ -521,7 +584,7 @@ function Fees({ block, canWrite }) {
 
 /* ========================================================== notifications */
 
-function Notifications({ block, canWrite }) {
+function Notifications({ block, canWrite, whatsapp }) {
   const [state, formAction] = useActionState(saveNotificationSettings, {})
   useSaved(state)
 
@@ -551,8 +614,84 @@ function Notifications({ block, canWrite }) {
     },
   ]
 
+  // WhatsApp is the one channel here that actually sends. Email and SMS are
+  // switches with nothing behind them yet, so this group is deliberately
+  // honest about the difference: it is the only one that can be greyed out,
+  // and the only one that names what will happen.
+  const WA_ROWS = [
+    ['wa_absence', 'Absence alerts', 'Message the parent when a child is marked absent'],
+    ['wa_fee_received', 'Fee receipts', 'Message the parent when a payment is taken'],
+    ['wa_fee_due', 'Fee reminders', 'Message the parent when a challan is issued'],
+    ['wa_result', 'Exam results', 'Message the parent when a result is published'],
+    ['wa_admission', 'New admission', 'Welcome message when a student is admitted'],
+  ]
+
+  const ready = Boolean(whatsapp?.ready)
+  const auto = whatsapp?.auto_send ?? {}
+
   return (
     <form id="notifications-form" action={formAction} className="flex flex-col gap-4">
+      {/* ------------------------------------------------------- WhatsApp */}
+      <div className="card overflow-hidden">
+        <div className="panel-head flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+          <div className="flex items-center gap-3">
+            <span
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/15 text-xs text-white"
+              aria-hidden="true"
+            >
+              ✉
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-white">WhatsApp Notifications</p>
+              <p className="text-xs text-white/75">
+                {ready
+                  ? `Sending from ${whatsapp.linked_number ? `+${whatsapp.linked_number}` : 'the linked phone'}`
+                  : 'Needs a linked phone before anything can send'}
+              </p>
+            </div>
+          </div>
+          <Link href="/school/settings/whatsapp" className="btn btn-ghost !py-1.5">
+            {ready ? 'Manage' : 'Set up'}
+          </Link>
+        </div>
+
+        {!ready && (
+          <p
+            className="mx-5 mt-4 rounded-lg px-3 py-2 text-xs"
+            style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}
+          >
+            {whatsapp?.module_on === false
+              ? 'This school does not have the WhatsApp module.'
+              : whatsapp?.session_status === 'connected'
+                ? 'The phone is linked but sending is switched off. Turn it on under Settings → WhatsApp.'
+                : 'No phone is linked yet. Scan the QR code under Settings → WhatsApp, then these switches start working.'}{' '}
+            You can set them now either way — nothing goes out until WhatsApp is ready.
+          </p>
+        )}
+
+        <fieldset disabled={!canWrite} className="contents">
+          <div className="px-5 pb-2 pt-2">
+            {WA_ROWS.map(([name, label, hint]) => (
+              <Switch
+                key={name}
+                name={name}
+                label={label}
+                hint={hint}
+                // Read from whatsapp_settings.auto_send, NOT from the
+                // notifications block -- one switch, one home. See
+                // saveNotificationSettings().
+                defaultChecked={Boolean(auto[name.replace('wa_', '')])}
+              />
+            ))}
+          </div>
+        </fieldset>
+
+        <p className="px-5 pb-4 text-xs" style={{ color: 'var(--muted)' }}>
+          Each needs a template under Settings → WhatsApp → Templates. A switch that is on with
+          no template written sends nothing.
+        </p>
+      </div>
+
       <fieldset disabled={!canWrite} className="contents">
         {GROUPS.map((g) => (
           <div key={g.title} className="card overflow-hidden">
@@ -709,7 +848,15 @@ function Appearance({ block, canWrite }) {
   )
 }
 
-export default function SettingsTabs({ section, school, blocks, canWrite }) {
+export default function SettingsTabs({
+  section,
+  school,
+  blocks,
+  canWrite,
+  whatsapp,
+  documents,
+  schoolId,
+}) {
   if (section === 'academic') {
     return <Academic block={blocks.academic ?? {}} canWrite={canWrite} />
   }
@@ -717,7 +864,23 @@ export default function SettingsTabs({ section, school, blocks, canWrite }) {
     return <Fees block={blocks.fees ?? {}} canWrite={canWrite} />
   }
   if (section === 'notifications') {
-    return <Notifications block={blocks.notifications ?? {}} canWrite={canWrite} />
+    return (
+      <Notifications
+        block={blocks.notifications ?? {}}
+        canWrite={canWrite}
+        whatsapp={whatsapp}
+      />
+    )
+  }
+  if (section === 'documents') {
+    return (
+      <DocumentsBlock
+        row={documents}
+        school={school}
+        schoolId={schoolId}
+        canWrite={canWrite}
+      />
+    )
   }
   if (section === 'appearance') {
     return <Appearance block={blocks.appearance ?? {}} canWrite={canWrite} />

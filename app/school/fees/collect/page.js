@@ -19,6 +19,7 @@ import {
   studentName,
 } from '@/lib/fee-options'
 import { cancelChallan } from '../actions'
+import { feePayers } from '../payers'
 import PaymentPanel from './payment-panel'
 import BatchPanel from './batch-panel'
 
@@ -95,13 +96,9 @@ export default async function CollectFeePage({ searchParams }) {
     .filter((c) => c.state !== 'paid' && c.state !== 'cancelled')
     .reduce((sum, c) => sum + remaining(c), 0)
 
-  const openChallans = challans
-    .filter((c) => c.state !== 'paid' && c.state !== 'cancelled')
-    .map((c) => ({
-      id: c.id,
-      label: `${c.challan_number ?? 'Challan'} · ${studentName(c.students)} · ${money(remaining(c))} due`,
-      outstanding: remaining(c),
-    }))
+  // Not filtered by the month on screen: a counter looking at October must
+  // still be able to take money for June, which is the arrears case.
+  const payers = await feePayers(supabase, schoolId)
 
   const exportRows = challans.map((c, i) => ({
     n: i + 1,
@@ -165,9 +162,9 @@ export default async function CollectFeePage({ searchParams }) {
           />
           {canWrite && (
             <>
-              {openChallans.length > 0 && (
+              {payers.length > 0 && (
                 <PaymentPanel
-                  challans={openChallans}
+                  students={payers}
                   trigger={{ label: 'Collect Fee', className: 'btn btn-blue' }}
                 />
               )}
@@ -392,14 +389,8 @@ export default async function CollectFeePage({ searchParams }) {
                       {canWrite && c.state !== 'paid' && c.state !== 'cancelled' && (
                         <>
                           <PaymentPanel
-                            challanId={c.id}
-                            challans={[
-                              {
-                                id: c.id,
-                                label: `${c.challan_number ?? 'Challan'} · ${studentName(c.students)}`,
-                                outstanding: remaining(c),
-                              },
-                            ]}
+                            students={payers}
+                            studentId={c.student_id}
                             trigger={{
                               label: 'Collect',
                               className: 'btn btn-primary !px-2.5 !py-1',

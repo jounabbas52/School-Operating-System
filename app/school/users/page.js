@@ -1,19 +1,20 @@
 import RefreshButton from '@/components/refresh-button'
 import { getSchoolContext } from '@/lib/school-context'
-import { accessTree } from '@/lib/access'
+import { accessFrom, accessTree } from '@/lib/access'
 import NewUser from './new-user'
 import RowActions from './row-actions'
 
 export const metadata = { title: 'Users & Access' }
 
-// Who may sign in, and what each of them may do.
+// Who may sign in, and roughly what each of them may do. The detail is one
+// click away, on their own access page.
 //
-// There are no roles. Every row is one person with their own sheet, and the
-// guard button at the end of the row is where that sheet is set -- page by
-// page, with view / create / edit / delete on each.
+// There are no roles. Two switches decide everything: a MODULE is on or off
+// for this person, and inside a module that is on, each PAGE carries view,
+// edit and delete.
 //
-// The administrator is simply somebody whose sheet has everything ticked.
-// Staff are created with nothing ticked, and are opened up a page at a time.
+// The administrator is simply somebody with everything switched on. Staff are
+// created with nothing, and are opened up a module at a time.
 
 function Stat({ n, label, tone }) {
   return (
@@ -42,10 +43,11 @@ export default async function UsersPage() {
 
   const canWrite = permissions.has('users.write')
 
-  const [{ data: people, error }, { data: access, error: accessError }] = await Promise.all([
+  const [{ data: people, error }, { data: access, error: accessError }, { data: moduleRows }] =
+    await Promise.all([
     supabase
       .from('profiles')
-      .select('id, full_name, email, phone, status, last_login, created_at')
+      .select('id, full_name, email, phone, status, last_login, created_at, is_school_admin')
       .eq('school_id', schoolId)
       .order('created_at'),
     // Everybody's list in one read, split per person below -- one query
@@ -54,6 +56,9 @@ export default async function UsersPage() {
       .from('user_page_access')
       .select('profile_id, page, section, can_view, can_edit, can_delete')
       .eq('school_id', schoolId),
+    // Rule 1, for the summary: a page under a switched-off module is not
+    // access, so counting it here would overstate what somebody has.
+    supabase.from('user_module_access').select('profile_id, module, enabled').eq('school_id', schoolId),
   ])
 
   // The guard's tree, narrowed to what this school actually has. A page for a
@@ -71,8 +76,40 @@ export default async function UsersPage() {
     sheets.set(row.profile_id, list)
   }
 
-  const rows = people ?? []
-  const activeCount = rows.filter((p) => p.status === 'active').length
+  const modulesByPerson = new Map()
+  for (const row of moduleRows ?? []) {
+    const list = modulesByPerson.get(row.profile_id) ?? []
+    list.push(row)
+    modulesByPerson.set(row.profile_id, list)
+  }
+
+  // What this person can ACTUALLY reach, both rules applied -- the same
+  // function the sidebar is built from, so the number in the table and the
+  // menu they see cannot disagree.
+  const summary = (id) => {
+    const { pages } = accessFrom(sheets.get(id) ?? [], modulesByPerson.get(id) ?? [])
+    let granted = 0
+    for (const row of pages.values()) {
+      granted += (row.view ? 1 : 0) + (row.edit ? 1 : 0) + (row.delete ? 1 : 0)
+    }
+    return {
+      granted,
+      visible: [...pages.values()].filter((p) => p.view).length,
+      modules: (modulesByPerson.get(id) ?? []).filter((m) => m.enabled).length,
+    }
+  }
+
+  // ADMINISTRATORS ARE NOT LISTED HERE.
+  //
+  // This screen is the list of people whose access is being decided, and an
+  // administrator's is not: they have everything, always, with nothing to
+  // configure. Showing them in a table of access levels only invites somebody
+  // to try setting one.
+  const everyone = people ?? []
+  const admins = everyone.filter((p) => p.is_school_admin)
+  const rows = everyone.filter((p) => !p.is_school_admin)
+  const activeStaff = rows.filter((p) => p.status === 'active').length
+  const awaiting = rows.filter((p) => summary(p.id).visible === 0).length
 
   const stamp = (value) =>
     value
@@ -107,18 +144,20 @@ export default async function UsersPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat
           n={rows.length}
-          label="Total users"
+          label={`User ${rows.length === 1 ? 'account' : 'accounts'}`}
           tone={{ bg: 'var(--brand-soft)', ink: 'var(--brand-ink)', icon: '👥' }}
         />
         <Stat
-          n={activeCount}
+          n={activeStaff}
           label="Active"
           tone={{ bg: 'var(--green-soft)', ink: 'var(--green-ink)', icon: '✓' }}
         />
+        {/* The number that actually needs acting on: accounts that exist and
+            can reach nothing yet. */}
         <Stat
-          n={rows.length - activeCount}
-          label="Suspended"
-          tone={{ bg: 'var(--red-soft)', ink: 'var(--red-ink)', icon: '⃠' }}
+          n={awaiting}
+          label="Waiting for access"
+          tone={{ bg: 'var(--amber-soft)', ink: 'var(--amber-ink)', icon: '⧗' }}
         />
       </div>
 
@@ -131,7 +170,7 @@ export default async function UsersPage() {
           style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}
         >
           <strong>Access sheets could not be read.</strong> {accessError.message} — run{' '}
-          <code className="font-mono text-[0.72rem]">supabase/migrations/025_page_access.sql</code>{' '}
+          <code className="font-mono text-[0.72rem]">supabase/migrations/026_simple_access.sql</code>{' '}
           in the SQL editor. Until then the Access column below is blank for everybody because of
           this, not because nobody has access.
         </p>
@@ -162,16 +201,7 @@ export default async function UsersPage() {
           <tbody>
             {rows.map((person) => {
               const isMe = person.id === me?.id
-              const sheet = sheets.get(person.id) ?? []
-              const granted = sheet.reduce(
-                (n, r) =>
-                  n +
-                  (r.can_view ? 1 : 0) +
-                  (r.can_edit ? 1 : 0) +
-                  (r.can_delete ? 1 : 0),
-                0
-              )
-              const visible = sheet.filter((r) => r.can_view).length
+              const { granted, visible, modules: liveModules } = summary(person.id)
               const everything = totalPermissions > 0 && granted >= totalPermissions
 
               return (
@@ -209,7 +239,8 @@ export default async function UsersPage() {
                           {granted}/{totalPermissions}
                         </span>
                         <span className="text-[0.65rem]" style={{ color: 'var(--muted-2)' }}>
-                          {visible} page{visible === 1 ? '' : 's'}
+                          {visible} page{visible === 1 ? '' : 's'} · {liveModules} module
+                          {liveModules === 1 ? '' : 's'}
                         </span>
                       </span>
                     ) : (
@@ -218,13 +249,7 @@ export default async function UsersPage() {
                   </td>
 
                   <td>
-                    <RowActions
-                      person={person}
-                      tree={tree}
-                      rows={sheet}
-                      canWrite={canWrite}
-                      isMe={isMe}
-                    />
+                    <RowActions person={person} canWrite={canWrite} isMe={isMe} />
                   </td>
                 </tr>
               )
@@ -235,15 +260,25 @@ export default async function UsersPage() {
 
       <div className="flex flex-col gap-1.5 text-xs" style={{ color: 'var(--muted)' }}>
         <p>
-          <strong>Access</strong> opens one person&rsquo;s sheet: every page in the app, with See,
-          Create, Edit and Delete on each. A page they are not given never appears in their sidebar,
-          and the database refuses the rows as well — so it cannot be reached by typing the address
-          in by hand either. A page they can see but not edit opens exactly as it does for you, with
+          <strong>Access</strong> opens one person&rsquo;s own page, with the whole menu on it.
+          Each group has a switch: off, and that part of the app is not in their sidebar at all.
+          Inside a group that is on, every page carries View, Edit and Delete. A page they were not
+          given cannot be reached by typing the address in by hand either — the database refuses the
+          rows as well. A page they can view but not edit opens exactly as it does for you, with
           nothing on it that changes anything.
         </p>
         <p>
           New accounts are created with <strong>no access at all</strong>. That is deliberate: an
           account that can reach nothing is harmless, and defaults are what people forget to change.
+        </p>
+        <p>
+          <strong>Administrators</strong> are not on this system. They have every page of every
+          module, always, and no list to configure — they are the people who write everybody
+          else&rsquo;s. Appointing one is deliberately not a button here: it is{' '}
+          <code className="font-mono text-[0.72rem]">
+            SELECT make_school_admin(&apos;their@email&apos;);
+          </code>{' '}
+          in the SQL editor.
         </p>
       </div>
     </div>

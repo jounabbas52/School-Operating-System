@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSchoolContext } from '@/lib/school-context'
 import { StatCard, StatRow } from '@/components/ui'
 import { publicUrl, signedPhotoUrls } from '@/lib/storage'
+import { loadDocument } from '@/lib/documents'
 import CardSettingsPanel from './card-settings-panel'
 import CardGrid, { PrintButton } from './card-grid'
 
@@ -13,26 +14,40 @@ export default async function IdCardsPage({ searchParams }) {
   const q = (params?.q ?? '').trim()
   const classFilter = params?.class ?? ''
 
-  const { schoolId, school, supabase } = await getSchoolContext()
+  const { schoolId, school, permissions, supabase } = await getSchoolContext()
+  // The design panel writes id_card_settings and uploads to school-assets,
+  // both gated on core.settings.write in the database -- see the same note on
+  // the certificates page.
+  const canConfigure = permissions.has('core.settings.write')
 
-  const [{ data: classes }, { data: sections }, { data: settings }] = await Promise.all([
-    supabase
-      .from('classes')
-      .select('id, name, grade_levels(name, ordinal)')
-      .eq('school_id', schoolId)
-      .eq('is_deleted', false),
-    supabase
-      .from('sections')
-      .select('id, name')
-      .eq('school_id', schoolId)
-      .eq('is_deleted', false),
-    supabase.from('id_card_settings').select('*').eq('school_id', schoolId).maybeSingle(),
-  ])
+  const [{ data: classes }, { data: sections }, { data: settings }, { data: currentSession }] =
+    await Promise.all([
+      supabase
+        .from('classes')
+        .select('id, name, grade_levels(name, ordinal)')
+        .eq('school_id', schoolId)
+        .eq('is_deleted', false),
+      supabase
+        .from('sections')
+        .select('id, name')
+        .eq('school_id', schoolId)
+        .eq('is_deleted', false),
+      supabase.from('id_card_settings').select('*').eq('school_id', schoolId).maybeSingle(),
+      // Printed on the back of the card, so a card found next July is
+      // recognisably last year's.
+      supabase
+        .from('sessions')
+        .select('name')
+        .eq('school_id', schoolId)
+        .eq('is_current', true)
+        .eq('is_deleted', false)
+        .maybeSingle(),
+    ])
 
   let query = supabase
     .from('students')
     .select(
-      'id, first_name, last_name, father_name, admission_number, roll_number, gender, status, date_of_birth, current_address, current_class_id, current_section_id, photo_url'
+      'id, first_name, last_name, father_name, admission_number, roll_number, gender, status, date_of_birth, blood_group, guardian_phone, emergency_phone, current_address, current_class_id, current_section_id, photo_url'
     )
     .eq('school_id', schoolId)
     .eq('is_deleted', false)
@@ -54,21 +69,31 @@ export default async function IdCardsPage({ searchParams }) {
     (students ?? []).map((s) => s.photo_url)
   )
 
+  const doc = await loadDocument(supabase, schoolId, school)
+
   const classById = new Map((classes ?? []).map((c) => [c.id, c.grade_levels?.name ?? c.name]))
   const sectionById = new Map((sections ?? []).map((s) => [s.id, s.name]))
 
+  // camelCase, matching what components/print/id-card.js reads. The old
+  // snake_case shape was the database row leaking into a print component,
+  // which is also why the card could not show anything the query had not
+  // already named exactly right.
   const cards = (students ?? []).map((s) => ({
     id: s.id,
     name: [s.first_name, s.last_name].filter(Boolean).join(' '),
-    father_name: s.father_name,
-    admission_number: s.admission_number,
-    roll_number: s.roll_number,
-    klass: classById.get(s.current_class_id) ?? '—',
-    section: sectionById.get(s.current_section_id) ?? '—',
+    fatherName: s.father_name,
+    admissionNumber: s.admission_number,
+    rollNumber: s.roll_number,
+    className: classById.get(s.current_class_id) ?? '—',
+    sectionName: sectionById.get(s.current_section_id) ?? '—',
     gender: s.gender,
     status: s.status,
-    date_of_birth: s.date_of_birth,
+    dateOfBirth: s.date_of_birth,
+    bloodGroup: s.blood_group,
+    guardianPhone: s.guardian_phone,
+    emergencyPhone: s.emergency_phone,
     address: s.current_address,
+    session: currentSession?.name ?? null,
     photoUrl: photoUrls.get(s.photo_url) ?? null,
   }))
 
@@ -76,12 +101,23 @@ export default async function IdCardsPage({ searchParams }) {
     (a, b) => (a.grade_levels?.ordinal ?? 999) - (b.grade_levels?.ordinal ?? 999)
   )
 
-  // The card component needs a school name even before settings are saved.
+  // The card component needs a school name even before settings are saved,
+  // and the letterhead row is where the rest falls back to -- a school that
+  // filled in Documents & Branding once should not have to retype its phone
+  // number here to get it on the back of a card.
   const effective = {
     ...(settings ?? {}),
-    school_name: settings?.school_name || school?.school_name,
-    logoUrl: publicUrl(settings?.logo_url),
+    school_name: settings?.school_name || doc.name,
+    school_address: settings?.school_address || doc.address,
+    school_phone: settings?.school_phone || doc.phone,
+    school_email: settings?.school_email || doc.email,
+    logoUrl: publicUrl(settings?.logo_url) ?? doc.logoUrl,
     backgroundUrl: publicUrl(settings?.background_url),
+    principalSignatureUrl:
+      publicUrl(settings?.principal_signature_url) ?? doc.principal.signatureUrl,
+    signatorySignatureUrl: publicUrl(settings?.signatory_signature_url),
+    stampUrl: publicUrl(settings?.stamp_url) ?? doc.schoolStampUrl,
+    principal_label: settings?.principal_label || doc.principal.label,
   }
 
   const { count: totalActive } = await supabase
@@ -99,17 +135,21 @@ export default async function IdCardsPage({ searchParams }) {
             ID Cards
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: 'var(--muted)' }}>
-            One template for the whole school. Printing uses your browser&rsquo;s print dialog.
+            One template for the whole school, at card size (85.6 × 54 mm). Printing uses your
+            browser&rsquo;s print dialog.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <RefreshButton />
-          <CardSettingsPanel
-            settings={settings}
-            schoolName={school?.school_name}
-            schoolId={schoolId}
-          />
+          {canConfigure && (
+            <CardSettingsPanel
+              settings={settings}
+              schoolName={school?.school_name}
+              schoolId={schoolId}
+              doc={doc}
+            />
+          )}
           <PrintButton count={cards.length} />
         </div>
       </div>
@@ -121,7 +161,7 @@ export default async function IdCardsPage({ searchParams }) {
           <StatCard label="Classes" value={classOptions.length} tone="green" />
           <StatCard
             label="Without admission no"
-            value={cards.filter((c) => !c.admission_number).length}
+            value={cards.filter((c) => !c.admissionNumber).length}
             tone="amber"
           />
         </StatRow>
@@ -177,7 +217,7 @@ export default async function IdCardsPage({ searchParams }) {
         <CardGrid cards={cards} settings={effective} />
       )}
 
-      {cards.some((c) => !c.admission_number) && (
+      {cards.some((c) => !c.admissionNumber) && (
         <p
           className="no-print rounded-lg px-3 py-2 text-sm"
           style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}

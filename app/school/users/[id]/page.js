@@ -5,11 +5,10 @@ import SubmitButton from '@/components/submit-button'
 import ConfirmButton from '@/components/confirm'
 import { Select } from '@/components/combobox'
 import { getSchoolContext } from '@/lib/school-context'
-import { ACTION_COLUMN, accessFrom, accessTree } from '@/lib/access'
+import { ACTION_COLUMN, PAGE_BY_KEY, accessFrom, accessTree } from '@/lib/access'
 import { ACTION_LABEL, ACTION_TONE, MODULE_LABEL, recordLabel, stamp, summarise } from '@/lib/audit'
 import { NAV } from '../../nav-items'
 import { setUserStatus, linkStaffAccount, removeUser, grantFullAccess } from '../../actions'
-import AccessEditor from '../access-editor'
 import PasswordForm from './password-form'
 
 export const metadata = { title: 'User' }
@@ -120,12 +119,17 @@ export default async function UserDetailPage({ params }) {
   const canWrite = permissions.has('users.write')
   const canSeeAudit = permissions.has('core.audit.read')
 
-  const [{ data: person }, { data: staffRows }, { data: activity }, { data: accessRows }] =
-    await Promise.all([
+  const [
+    { data: person },
+    { data: staffRows },
+    { data: activity },
+    { data: accessRows },
+    { data: moduleRows },
+  ] = await Promise.all([
       supabase
         .from('profiles')
         .select(
-          'id, full_name, preferred_name, email, phone, address, gender, date_of_birth, avatar_url, status, last_login, created_at, updated_at, school_id'
+          'id, full_name, preferred_name, email, phone, address, gender, date_of_birth, avatar_url, status, last_login, created_at, updated_at, school_id, is_school_admin'
         )
         .eq('id', id)
         .eq('school_id', schoolId)
@@ -152,6 +156,12 @@ export default async function UserDetailPage({ params }) {
       supabase
         .from('user_page_access')
         .select('page, section, can_view, can_edit, can_delete')
+        .eq('school_id', schoolId)
+        .eq('profile_id', id),
+      // Rule 1: the sidebar groups that are on for them.
+      supabase
+        .from('user_module_access')
+        .select('module, enabled')
         .eq('school_id', schoolId)
         .eq('profile_id', id),
     ])
@@ -184,8 +194,9 @@ export default async function UserDetailPage({ params }) {
     : { data: [] }
 
   const isMe = person.id === me?.id
+  const targetIsAdmin = Boolean(person.is_school_admin)
   const sheet = accessRows ?? []
-  const byPage = Object.fromEntries(sheet.map((r) => [r.page, r]))
+  let byPage = Object.fromEntries(sheet.map((r) => [r.page, r]))
 
   // The page list, narrowed to the modules this school has: a page for a
   // module nobody bought would be a line that means nothing however it reads.
@@ -198,18 +209,39 @@ export default async function UserDetailPage({ params }) {
     (n, p) => n + p.actions.filter((a) => byPage[p.key]?.[ACTION_COLUMN[a]]).length,
     0
   )
-  const open = allPages.filter((p) => byPage[p.key]?.can_view)
+  const open = allPages.filter((p) => liveModules.has(p.module) && byPage[p.key]?.can_view)
 
-  const { permissions: granted } = accessFrom(sheet)
+  let liveModules = new Set((moduleRows ?? []).filter((m) => m.enabled).map((m) => m.module))
+
+  // An administrator holds no rows at all, so the grid below would read as
+  // "nothing" while the note above it says "everything". Fill it in from what
+  // they can actually reach, which is all of it.
+  if (targetIsAdmin) {
+    liveModules = new Set(tree.map((g) => g.key))
+    byPage = Object.fromEntries(
+      tree
+        .flatMap((g) => g.pages)
+        .map((p) => [
+          p.key,
+          {
+            can_view: true,
+            can_edit: p.actions.includes('edit'),
+            can_delete: p.actions.includes('delete'),
+          },
+        ])
+    )
+  }
+  const { permissions: granted } = accessFrom(sheet, moduleRows)
 
   // The sidebar this person sees, worked out exactly as the layout works it
   // out: module gate, then their own page rows.
   const reachable = NAV.filter((item) => enabledModules.has(item.module)).flatMap((item) =>
     item.children
       ? item.children
-          .filter((c) => (!c.module || enabledModules.has(c.module)) && byPage[c.href]?.can_view)
+          .filter((c) => (!c.module || enabledModules.has(c.module)) && liveModules.has(PAGE_BY_KEY[c.href]?.module) && byPage[c.href]?.can_view)
           .map((c) => ({ ...c, group: item.label }))
-      : item.href && (item.href === '/school' || byPage[item.href]?.can_view)
+      : item.href && (item.href === '/school' ||
+          (liveModules.has(PAGE_BY_KEY[item.href]?.module) && byPage[item.href]?.can_view))
         ? [{ ...item, group: null }]
         : []
   )
@@ -234,6 +266,11 @@ export default async function UserDetailPage({ params }) {
                 {name}
               </h1>
               {isMe && <span className="pill pill-brand">you</span>}
+              {targetIsAdmin && (
+                <span className="pill pill-amber" title="Full access, no access list">
+                  administrator
+                </span>
+              )}
               <span className={`pill ${STATUS_PILL[person.status] ?? 'pill-muted'}`}>
                 {person.status}
               </span>
@@ -261,12 +298,17 @@ export default async function UserDetailPage({ params }) {
         <Card
           wide
           title="Access"
-          note={`${grantedCount} of ${totalPermissions} granted · ${open.length} page${
-            open.length === 1 ? '' : 's'
-          } in their sidebar`}
+          note={
+            targetIsAdmin
+              ? 'Administrator — every page of every module, always'
+              : `${grantedCount} of ${totalPermissions} granted · ${open.length} page${
+                  open.length === 1 ? '' : 's'
+                } in their sidebar`
+          }
           action={
             canWrite &&
-            !isMe && (
+            !isMe &&
+            !targetIsAdmin && (
               <span className="flex flex-wrap items-center gap-2">
                 {/* An administrator needs everything; staff are opened one
                     page at a time. Making the first case one click keeps
@@ -280,20 +322,27 @@ export default async function UserDetailPage({ params }) {
                     Give full access
                   </SubmitButton>
                 </form>
-                <AccessEditor
-                  profileId={person.id}
-                  personName={name}
-                  tree={tree}
-                  rows={sheet}
-                  trigger={{
-                    label: 'Manage access',
-                    className: 'btn btn-primary !px-3 !py-1.5 text-xs',
-                  }}
-                />
+                <Link
+                  href={`/school/users/${person.id}/access`}
+                  className="btn btn-primary !px-3 !py-1.5 text-xs"
+                >
+                  Manage access
+                </Link>
               </span>
             )
           }
         >
+          {targetIsAdmin && (
+            <p
+              className="rounded-lg px-3 py-2 text-sm"
+              style={{ background: 'var(--amber-soft)', color: 'var(--amber-ink)' }}
+            >
+              This account is an administrator. It has every page of every module this school has,
+              always, and no access list to set — administrators are the people who write everybody
+              else&rsquo;s. The grid below is what they can reach, which is all of it.
+            </p>
+          )}
+
           {isMe && (
             <p className="text-xs" style={{ color: 'var(--muted-2)' }}>
               This is your own sheet, so it is read-only here. Another administrator can change it —
@@ -303,7 +352,10 @@ export default async function UserDetailPage({ params }) {
 
           <div className="grid gap-3 sm:grid-cols-2">
             {tree.map((group) => {
-              const openHere = group.pages.filter((page) => byPage[page.key]?.can_view)
+              const moduleOn = liveModules.has(group.key)
+              const openHere = moduleOn
+                ? group.pages.filter((page) => byPage[page.key]?.can_view)
+                : []
               return (
                 <div
                   key={group.key}

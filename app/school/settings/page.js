@@ -9,18 +9,44 @@ const SECTIONS = [
   { id: 'school', label: 'School Info', sub: 'Name, address & contact', icon: '▣' },
   { id: 'academic', label: 'Academic', sub: 'Year, periods & grading', icon: '▦' },
   { id: 'fees', label: 'Fee & Finance', sub: 'Currency, late fee rules', icon: '₨' },
+  // Everything the school puts on paper. Its own section rather than a corner
+  // of School Info, because it is read by every print screen in the app --
+  // challans, receipts, salary slips, vouchers, certificates, ID cards -- and
+  // it is the one place to fill the letterhead in once.
+  {
+    id: 'documents',
+    label: 'Documents',
+    sub: 'Letterhead, stamps & bank',
+    icon: '✍',
+  },
   { id: 'notifications', label: 'Notifications', sub: 'Email, SMS & in-app', icon: '◉' },
+  // Not a `section` like the others: WhatsApp is its own screen with its own
+  // tabs and its own permission (whatsapp.write, not core.settings.write),
+  // so the rail links out to it rather than rendering a block inline. `href`
+  // is what marks the difference.
+  {
+    id: 'whatsapp',
+    label: 'WhatsApp',
+    sub: 'Linked phone, auto-send & templates',
+    icon: '✉',
+    href: '/school/settings/whatsapp',
+  },
   { id: 'appearance', label: 'Appearance', sub: 'Theme, language & format', icon: '◐' },
 ]
 
 export default async function SettingsPage({ searchParams }) {
   const params = await searchParams
-  const section = SECTIONS.some((s) => s.id === params?.section) ? params.section : 'school'
+  // Entries carrying an href are links out, not tabs -- so they can never
+  // be the selected section.
+  const section = SECTIONS.some((s) => s.id === params?.section && !s.href)
+    ? params.section
+    : 'school'
 
   const { schoolId, permissions, supabase } = await getSchoolContext()
   const canWrite = permissions.has('core.settings.write')
 
-  const [{ data: school }, { data: settingRows }] = await Promise.all([
+  const [{ data: school }, { data: settingRows }, { data: waStatus }, { data: documents }] =
+    await Promise.all([
     supabase
       .from('schools')
       .select(
@@ -29,6 +55,16 @@ export default async function SettingsPage({ searchParams }) {
       .eq('id', schoolId)
       .maybeSingle(),
     supabase.from('settings').select('key, value').eq('school_id', schoolId),
+    // Through the RPC, not a table read: whatsapp_settings is gated on
+    // whatsapp.read, and the person editing Notifications may only hold
+    // core.settings.write. whatsapp_status() carries no credentials and no
+    // message content, so it is safe to answer for either.
+    supabase.rpc('whatsapp_status'),
+    // The letterhead. Read as the raw row rather than through
+    // loadDocument(), because the form edits the stored values and has to
+    // show which ones are actually set -- a fallback filled in would look
+    // saved and then not be.
+    supabase.from('document_settings').select('*').eq('school_id', schoolId).maybeSingle(),
   ])
 
   // One keyed row per block; a missing row means the block has never been
@@ -124,7 +160,10 @@ export default async function SettingsPage({ searchParams }) {
               return (
                 <Link
                   key={s.id}
-                  href={s.id === 'school' ? '/school/settings' : `/school/settings?section=${s.id}`}
+                  href={
+                    s.href ??
+                    (s.id === 'school' ? '/school/settings' : `/school/settings?section=${s.id}`)
+                  }
                   className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition"
                   style={{
                     background: on ? 'var(--brand-soft)' : 'transparent',
@@ -158,6 +197,9 @@ export default async function SettingsPage({ searchParams }) {
           school={school ?? {}}
           blocks={blocks}
           canWrite={canWrite}
+          whatsapp={Array.isArray(waStatus) ? (waStatus[0] ?? null) : (waStatus ?? null)}
+          documents={documents ?? null}
+          schoolId={schoolId}
         />
       </div>
     </div>

@@ -214,7 +214,7 @@ export default async function StaffAttendancePage({ searchParams }) {
             No staff match those filters
           </p>
           <p className="mx-auto mt-1 max-w-sm text-sm" style={{ color: 'var(--muted)' }}>
-            Only active staff appear on a register. Add them under HR / Staff, or widen the filters.
+            Only active staff appear on a register. Add them under Teachers & Staff, or widen the filters.
           </p>
           <Link href="/school/hr" className="btn btn-primary mt-4">
             Go to All Staff

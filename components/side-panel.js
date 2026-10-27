@@ -34,6 +34,10 @@ export default function SidePanel({
   // Admission-style forms need more than the default drawer width.
   width = 'max-w-md',
   variant = 'drawer',
+  // Modal only. The default suits a short form; a design panel with a live
+  // preview beside it wants the screen, and capping it at 46rem on a 1080p
+  // display puts the preview in a 300px porthole.
+  maxHeight = 'min(90dvh, 46rem)',
 }) {
   const sheetRef = useRef(null)
 
@@ -87,12 +91,12 @@ export default function SidePanel({
         aria-label={title}
         className={
           modal
-            ? `modal-sheet relative flex max-h-[min(90dvh,46rem)] w-full ${width} flex-col overflow-hidden rounded-2xl`
+            ? `modal-sheet relative flex w-full ${width} flex-col overflow-hidden rounded-2xl`
             : `panel-sheet relative flex h-full w-full ${width} flex-col`
         }
         style={{
           background: 'var(--card)',
-          ...(modal ? { border: '1px solid var(--border)' } : null),
+          ...(modal ? { border: '1px solid var(--border)', maxHeight } : null),
         }}
       >
         {/* Dark blue header marks the panel as an editing surface. */}
@@ -127,7 +131,9 @@ export default function SidePanel({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-5">
+          {children}
+        </div>
 
         {footer && (
           <div

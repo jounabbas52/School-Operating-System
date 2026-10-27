@@ -150,6 +150,9 @@ export async function saveTeacher(_prev, formData) {
     notes: text(formData.get('notes')),
     status,
     photo_url: text(formData.get('photo_url')),
+    // Used on anything this teacher signs -- a date sheet, a result card.
+    signature_url: text(formData.get('signature_url')),
+    stamp_url: text(formData.get('stamp_url')),
   }
 
   if (id) {

@@ -71,7 +71,7 @@ export default async function TeachersPage({ searchParams }) {
   let query = supabase
     .from('staff')
     .select(
-      'id, staff_number, first_name, last_name, subject_id, qualification, salary_structure_id, designation, department, employment_type, monthly_salary, hire_date, phone, work_phone, emergency_contact, work_email, cnic, gender, date_of_birth, blood_group, experience_years, address, notes, status, photo_url'
+      'id, staff_number, first_name, last_name, subject_id, qualification, salary_structure_id, designation, department, employment_type, monthly_salary, hire_date, phone, work_phone, emergency_contact, work_email, cnic, gender, date_of_birth, blood_group, experience_years, address, notes, status, photo_url, signature_url, stamp_url'
     )
     .eq('school_id', schoolId)
     .eq('is_deleted', false)
@@ -90,9 +90,12 @@ export default async function TeachersPage({ searchParams }) {
 
   // One batched call rather than one per row -- signing serially is a visible
   // stall on a full staff list.
+  // Photographs, signatures and stamps all live in the same private bucket,
+  // so one call signs the lot -- three separate batches would be three round
+  // trips for the same list of rows.
   const photoUrls = await signedPhotoUrls(
     supabase,
-    (teachers ?? []).map((t) => t.photo_url),
+    (teachers ?? []).flatMap((t) => [t.photo_url, t.signature_url, t.stamp_url]),
     3600,
     STAFF_PHOTOS
   )
@@ -317,6 +320,8 @@ export default async function TeachersPage({ searchParams }) {
                             nextStaffNumber={nextNumber ?? 'TCH-001'}
                             schoolId={schoolId}
                             photoUrl={photoUrls.get(t.photo_url) ?? null}
+                            signatureUrl={photoUrls.get(t.signature_url) ?? null}
+                            stampUrl={photoUrls.get(t.stamp_url) ?? null}
                             trigger={{ label: 'Edit', className: 'btn btn-ghost !px-2.5 !py-1' }}
                           />
                           <form action={deleteTeacher}>

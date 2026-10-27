@@ -332,6 +332,16 @@ REVOKE EXECUTE ON FUNCTION public.seed_school_user(text, text, text, text, text[
 -- ============================================================================
 -- 5. THE ACTUAL SEED -- edit the values, then it runs
 -- ============================================================================
+-- ONE ACCOUNT, AND NO STAFF.
+--
+-- This used to create a Demo Teacher and a Demo Accountant with invented
+-- access, which meant every school started with people nobody hired and an
+-- access list nobody wrote. Setting up a school is the administrator's job,
+-- and the Users screen is where it is done.
+--
+-- So: the platform owner, the school, and its administrator. The user list
+-- starts empty, and the first person in it is somebody the administrator
+-- decided to add.
 DO $seed$
 BEGIN
   -- You. This account can provision schools, disable modules, suspend
@@ -352,22 +362,13 @@ BEGIN
   -- A school on the "complete" plan (every module switched on).
   PERFORM public.seed_school('Stars High School', 'demo', 'complete', true);
 
-  -- Its staff. No roles: each of these gets their own sheet of sections,
-  -- and any of them can be re-ticked afterwards in Users & Access.
-  --
-  -- Everything, including Users & Access itself.
+  -- Its administrator: everything, always, and no access list to maintain.
+  -- Every other account in this school gets created by this person, from the
+  -- Users screen, with the access they decide.
   PERFORM public.seed_school_user(
-    'admin@demo.test', 'admin123', 'Demo Admin', 'demo');
+    'admin@demo.test', 'admin123', 'School Administrator', 'demo');
 
-  -- A teacher: their own sections only, and nothing outside teaching.
-  PERFORM public.seed_school_user(
-    'teacher@demo.test', 'teacher123', 'Demo Teacher', 'demo',
-    ARRAY['students', 'attendance', 'tests', 'exams'], true, 'own');
-
-  -- Money, and nothing else. Read and write, but no deletes.
-  PERFORM public.seed_school_user(
-    'accounts@demo.test', 'accounts123', 'Demo Accountant', 'demo',
-    ARRAY['fees', 'accounts', 'payroll', 'reports'], true, 'all');
+  PERFORM public.make_school_admin('admin@demo.test');
 END
 $seed$;
 

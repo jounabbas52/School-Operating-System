@@ -8,7 +8,7 @@ import { deleteStudent } from './actions'
 import { signedPhotoUrls } from '@/lib/storage'
 import StudentPanel from './student-panel'
 
-export const metadata = { title: 'Active Students' }
+export const metadata = { title: 'Current Students' }
 
 const fullName = (s) => [s.first_name, s.last_name].filter(Boolean).join(' ')
 
@@ -123,7 +123,7 @@ export default async function StudentsPage({ searchParams }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
-            Active Students
+            Current Students
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: 'var(--muted)' }}>
             {students?.length ?? 0} of {active?.name ?? 'no active session'}

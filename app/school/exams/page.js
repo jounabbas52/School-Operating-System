@@ -20,7 +20,7 @@ export default async function ExamsPage({ searchParams }) {
   const { schoolId, permissions, supabase } = await getSchoolContext()
   const canWrite = permissions.has('exams.write')
 
-  const [{ data: classes }, { data: sessions }, { data: years }] = await Promise.all([
+  const [{ data: classes }, { data: sessions }] = await Promise.all([
     supabase
       .from('classes')
       .select('id, name, grade_levels(name, ordinal)')
@@ -29,12 +29,6 @@ export default async function ExamsPage({ searchParams }) {
     supabase
       .from('sessions')
       .select('id, name, is_current')
-      .eq('school_id', schoolId)
-      .eq('is_deleted', false)
-      .order('start_date', { ascending: false }),
-    supabase
-      .from('academic_years')
-      .select('id, name, is_active')
       .eq('school_id', schoolId)
       .eq('is_deleted', false)
       .order('start_date', { ascending: false }),
@@ -48,7 +42,6 @@ export default async function ExamsPage({ searchParams }) {
     label: s.name,
     is_current: s.is_current,
   }))
-  const yearOptions = (years ?? []).map((y) => ({ id: y.id, label: y.name, is_active: y.is_active }))
 
   const classById = new Map(classOptions.map((c) => [c.id, c.label]))
   const sessionById = new Map(sessionOptions.map((s) => [s.id, s.label]))
@@ -56,7 +49,7 @@ export default async function ExamsPage({ searchParams }) {
   let query = supabase
     .from('exams')
     .select(
-      'id, name, class_id, session_id, academic_year_id, start_date, end_date, description, status, results_published_at'
+      'id, name, class_id, session_id, start_date, end_date, description, status, results_published_at'
     )
     .eq('school_id', schoolId)
     .eq('is_deleted', false)
@@ -134,7 +127,6 @@ export default async function ExamsPage({ searchParams }) {
             <ExamPanel
               classes={classOptions}
               sessions={sessionOptions}
-              years={yearOptions}
               trigger={{ label: '+ Create Exam', className: 'btn btn-primary' }}
             />
           )}
@@ -298,7 +290,6 @@ export default async function ExamsPage({ searchParams }) {
                             row={e}
                             classes={classOptions}
                             sessions={sessionOptions}
-                            years={yearOptions}
                             trigger={{ label: 'Edit', className: 'btn btn-ghost !px-2.5 !py-1' }}
                           />
                           <form action={deleteExam}>

@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:access": "node scripts/access-test.mjs"
+    "test:access": "node scripts/access-test.mjs",
+    "db:dry-run": "node scripts/dry-run-migration.mjs",
+    "test:dates": "node scripts/date-test.mjs",
+    "test:fees": "node scripts/fee-test.mjs",
+    "test": "node scripts/access-test.mjs && node scripts/date-test.mjs && node scripts/fee-test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.6",

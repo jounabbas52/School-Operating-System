@@ -7,7 +7,7 @@ import ExportButtons from '@/components/export-buttons'
 import RefreshButton from '@/components/refresh-button'
 import { setStudentStatus } from '../actions'
 
-export const metadata = { title: 'Old Students' }
+export const metadata = { title: 'Former Students' }
 
 const fullName = (s) => [s.first_name, s.last_name].filter(Boolean).join(' ')
 const makeFmt = (appearance) => (d) => formatDate(d, appearance)
@@ -107,7 +107,7 @@ export default async function OldStudentsPage({ searchParams }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
-            Old Students
+            Former Students
           </h1>
           <p className="mt-0.5 text-sm" style={{ color: 'var(--muted)' }}>
             Graduated, transferred and inactive records — kept for certificates and history.

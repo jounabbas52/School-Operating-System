@@ -2,7 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { ACTION_COLUMN, PAGE_BY_KEY, actionsFor } from '@/lib/access'
+import { ACTION_COLUMN, PAGE_BY_KEY, PAGE_TREE, actionsFor } from '@/lib/access'
+
+// The sidebar groups, for rule 1. A module the app does not have is not a
+// module somebody can be given.
+const MODULE_KEYS = new Set(PAGE_TREE.map((group) => group.key))
 
 // These actions do not check permissions themselves. RLS does: the policies
 // on profiles and user_page_access all require the relevant permission, so an
@@ -27,35 +31,29 @@ export async function setUserStatus(formData) {
   revalidatePath('/school/users/[id]', 'page')
 }
 
+// Delete a user. Actually delete them.
+//
+// This used to clear their access and then "detach" the profile by setting
+// school_id = NULL -- which the profiles_manage policy refuses, because its
+// WITH CHECK demands school_id = current_school_id() and NULL is not that.
+// The access rows were already gone by then, so the person stayed in the list
+// with nothing left: the worst of both outcomes, and a half-finished delete
+// reported as an error.
+//
+// delete_school_user() does it in the database instead, where the guards and
+// the cascades live. The sign-in account goes; the audit trail, the staff
+// record and any leave history stay, with the link to them blanked.
 export async function removeUser(formData) {
   const profileId = String(formData.get('profile_id'))
 
   const supabase = await createClient()
-  const { data: schoolId } = await supabase.rpc('current_school_id')
-
-  // Detach rather than delete: their auth account and any records they
-  // created stay intact, they simply lose access. Deleting the profile would
-  // cascade into audit history.
-  //
-  // The access sheet goes with them. Leaving it behind would silently restore
-  // every box the day somebody added them back.
-  const { error } = await supabase
-    .from('user_page_access')
-    .delete()
-    .eq('profile_id', profileId)
-    .eq('school_id', schoolId)
+  const { error } = await supabase.rpc('delete_school_user', { p_profile: profileId })
 
   if (error) throw new Error(error.message)
 
-  const { error: detachError } = await supabase
-    .from('profiles')
-    .update({ school_id: null, status: 'inactive' })
-    .eq('id', profileId)
-
-  if (detachError) throw new Error(detachError.message)
-
   revalidatePath('/school/users')
   revalidatePath('/school/users/[id]', 'page')
+  revalidatePath('/school', 'layout')
 }
 
 // Link a login to a staff record -- or unlink it.
@@ -161,15 +159,39 @@ export async function saveUserAccess(_prevState, formData) {
     return { error: 'You cannot change your own access. Ask another administrator.' }
   }
 
-  // The screen posts one `action:page` per switch that is on. A page or an
-  // action this app does not have is dropped rather than stored: an unknown
-  // row would grant nothing and sit in the table forever.
+  // An administrator has no access list. Writing one would be stored, ignored
+  // by has_permission(), and deeply misleading to whoever read it next.
+  const { data: target } = await supabase
+    .from('profiles')
+    .select('is_school_admin')
+    .eq('id', profileId)
+    .maybeSingle()
+
+  if (target?.is_school_admin) {
+    return {
+      error:
+        'That account is an administrator: it has everything, always, and no list to set.',
+    }
+  }
+
+  // RULE 1. The modules that are switched on. Anything naming a module this
+  // app does not have is dropped rather than stored.
+  const liveModules = [...new Set(formData.getAll('module').map(String))].filter((key) =>
+    MODULE_KEYS.has(key)
+  )
+
+  // RULE 2. One `action:page` per switch that is on, and only for pages
+  // under a module that is on -- a page switch under a switched-off module
+  // grants nothing, so storing it would be a row that lies about itself.
+  //
+  // A page or an action this app does not have is dropped the same way.
   const wanted = new Map()
   for (const raw of formData.getAll('grant')) {
     const [action, ...rest] = String(raw).split(':')
     const key = rest.join(':')
     const page = PAGE_BY_KEY[key]
     if (!page || !actionsFor(page).includes(action)) continue
+    if (!liveModules.includes(page.module)) continue
 
     const row = wanted.get(key) ?? {
       school_id: schoolId,
@@ -192,35 +214,51 @@ export async function saveUserAccess(_prevState, formData) {
 
   const rows = [...wanted.values()]
 
-  // Replace rather than merge: a switch turned off has to actually
-  // disappear, and a merge would quietly leave yesterday's access in place.
-  const { error: clearError } = await supabase
-    .from('user_page_access')
-    .delete()
-    .eq('school_id', schoolId)
-    .eq('profile_id', profileId)
+  // Replace rather than merge, for both rules: a switch turned off has to
+  // actually disappear, and a merge would quietly leave yesterday's access in
+  // place.
+  const denied = { error: 'You do not have permission to change access.' }
 
-  if (clearError) {
-    if (clearError.code === '42501') return { error: 'You do not have permission to change access.' }
-    return { error: clearError.message }
+  for (const table of ['user_page_access', 'user_module_access']) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('school_id', schoolId)
+      .eq('profile_id', profileId)
+
+    if (error) return error.code === '42501' ? denied : { error: error.message }
+  }
+
+  if (liveModules.length) {
+    const { error } = await supabase.from('user_module_access').insert(
+      liveModules.map((key) => ({
+        school_id: schoolId,
+        profile_id: profileId,
+        module: key,
+        enabled: true,
+      }))
+    )
+    if (error) return error.code === '42501' ? denied : { error: error.message }
   }
 
   if (rows.length) {
     const { error } = await supabase.from('user_page_access').insert(rows)
-    if (error) {
-      if (error.code === '42501') return { error: 'You do not have permission to change access.' }
-      return { error: error.message }
-    }
+    if (error) return error.code === '42501' ? denied : { error: error.message }
   }
 
   revalidatePath('/school/users')
   revalidatePath('/school/users/[id]', 'page')
+  // The access screen itself, so its switches re-seed from what was just
+  // written rather than from what they were when the page first rendered.
+  revalidatePath('/school/users/[id]/access', 'page')
   revalidatePath('/school', 'layout')
 
   const visible = rows.filter((r) => r.can_view).length
   return {
     ok: visible
-      ? `Saved — they can open ${visible} page${visible === 1 ? '' : 's'}.`
+      ? `Saved — ${visible} page${visible === 1 ? '' : 's'} across ${liveModules.length} module${
+          liveModules.length === 1 ? '' : 's'
+        }.`
       : 'Saved — they can open nothing.',
   }
 }
@@ -275,6 +313,9 @@ export async function grantFullAccess(formData) {
 
   revalidatePath('/school/users')
   revalidatePath('/school/users/[id]', 'page')
+  // The access screen itself, so its switches re-seed from what was just
+  // written rather than from what they were when the page first rendered.
+  revalidatePath('/school/users/[id]/access', 'page')
   revalidatePath('/school', 'layout')
 }
 

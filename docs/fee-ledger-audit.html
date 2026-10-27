@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fee Ledger Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Source+Sans+3:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper: #F4F6F8;
+    --surface: #FFFFFF;
+    --surface-2: #EAEEF2;
+    --ink: #1C2430;
+    --ink-2: #2E3A48;
+    --muted: #5B6676;
+    --rule: #D3D9E0;
+    --rule-strong: #AEB8C4;
+    --accent: #0F6E6A;
+    --accent-soft: #DCEEEC;
+    --credit: #1F7A4D;
+    --credit-soft: #DFF0E6;
+    --debit: #A64B2A;
+    --debit-soft: #F6E3DB;
+    --warn: #8A6A12;
+    --warn-soft: #F5ECD2;
+    --shadow: 0 1px 2px rgb(28 36 48 / .06), 0 8px 24px -12px rgb(28 36 48 / .18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #121820;
+      --surface: #1A222D;
+      --surface-2: #222C38;
+      --ink: #E6EBF1;
+      --ink-2: #CBD3DD;
+      --muted: #9AA6B5;
+      --rule: #2A3542;
+      --rule-strong: #3B4756;
+      --accent: #3FB3AD;
+      --accent-soft: #163A39;
+      --credit: #5BC08A;
+      --credit-soft: #163826;
+      --debit: #E0876A;
+      --debit-soft: #3D2419;
+      --warn: #D9B65A;
+      --warn-soft: #3B3117;
+      --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #121820;
+    --surface: #1A222D;
+    --surface-2: #222C38;
+    --ink: #E6EBF1;
+    --ink-2: #CBD3DD;
+    --muted: #9AA6B5;
+    --rule: #2A3542;
+    --rule-strong: #3B4756;
+    --accent: #3FB3AD;
+    --accent-soft: #163A39;
+    --credit: #5BC08A;
+    --credit-soft: #163826;
+    --debit: #E0876A;
+    --debit-soft: #3D2419;
+    --warn: #D9B65A;
+    --warn-soft: #3B3117;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 8px 24px -12px rgb(0 0 0 / .6);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+  .prose { max-width: 70ch; }
+
+  h1, h2, h3 {
+    font-family: "Newsreader", Georgia, "Times New Roman", serif;
+    font-weight: 600;
+    line-height: 1.15;
+    text-wrap: balance;
+    margin: 0;
+  }
+  h1 { font-size: 2.6rem; letter-spacing: -.01em; }
+  h2 { font-size: 1.7rem; margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--rule-strong); }
+  h3 { font-size: 1.2rem; margin-top: 28px; }
+  p { margin: 12px 0; color: var(--ink-2); }
+  p.lede { font-family: "Newsreader", Georgia, serif; font-size: 1.25rem; line-height: 1.45; color: var(--ink); margin-top: 16px; }
+  em { font-family: "Newsreader", Georgia, serif; font-style: italic; }
+  strong { color: var(--ink); font-weight: 600; }
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: .88em; }
+  code { background: var(--surface-2); padding: .1em .35em; border-radius: 3px; color: var(--ink); }
+  a { color: var(--accent); }
+
+  .eyebrow {
+    font-size: .74rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 14px; font-size: .9rem; color: var(--muted); }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  /* verdict chips */
+  .chip {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: .74rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    vertical-align: middle; white-space: nowrap;
+  }
+  .works   { background: var(--credit-soft); color: var(--credit); }
+  .partly  { background: var(--warn-soft);   color: var(--warn); }
+  .missing { background: var(--debit-soft);  color: var(--debit); }
+
+  /* Q&A */
+  .qa { display: grid; gap: 14px; margin-top: 20px; }
+  .q {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 18px 20px; box-shadow: var(--shadow);
+  }
+  .q h3 { margin: 0; font-size: 1.15rem; display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+  .q p { margin: 8px 0 0; }
+  .q .ref { font-size: .8rem; color: var(--muted); margin-top: 10px; }
+
+  /* tables */
+  .scroll { overflow-x: auto; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-size: .74rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--rule-strong); }
+  td.num, th.num { text-align: right; font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: .9rem; white-space: nowrap; }
+  td.dr { color: var(--debit); }
+  td.cr { color: var(--credit); }
+  tr.total td { border-top: 2px solid var(--rule-strong); border-bottom: 0; font-weight: 600; color: var(--ink); }
+  .gap td:first-child { font-weight: 600; color: var(--ink); min-width: 12rem; }
+
+  /* ledger sheet */
+  .sheet {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; box-shadow: var(--shadow);
+    padding: 18px 20px; margin: 18px 0;
+  }
+  .sheet-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 6px; }
+  .sheet-head .title { font-family: "Newsreader", Georgia, serif; font-size: 1.15rem; font-weight: 600; }
+  .sheet-head .sub { font-size: .85rem; color: var(--muted); }
+
+  /* voucher */
+  .voucher {
+    display: grid; grid-template-columns: 1fr; gap: 0; margin: 18px 0;
+    background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 6px; box-shadow: var(--shadow);
+    max-width: 560px;
+  }
+  .v-head { padding: 14px 18px; border-bottom: 1px dashed var(--rule-strong); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .v-head .school { font-family: "Newsreader", Georgia, serif; font-size: 1.1rem; font-weight: 600; }
+  .v-head .copy { font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); padding: 2px 8px; border-radius: 3px; }
+  .v-body { padding: 10px 18px 6px; }
+  .v-body table { font-size: .92rem; }
+  .v-body td, .v-body th { padding: 6px 4px; }
+  .v-foot { padding: 10px 18px 14px; border-top: 1px dashed var(--rule-strong); display: flex; justify-content: space-between; gap: 12px; font-size: .82rem; color: var(--muted); flex-wrap: wrap; }
+  .v-foot b { color: var(--ink); }
+  .stamp {
+    display: inline-block; transform: rotate(-6deg);
+    font-family: "IBM Plex Mono", monospace; font-size: .72rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--debit); border: 2px solid var(--debit); padding: 2px 8px; border-radius: 3px; opacity: .85;
+  }
+
+  /* build plan */
+  ol.plan { counter-reset: step; list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 14px; }
+  ol.plan li { position: relative; padding-left: 52px; }
+  ol.plan li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 2px;
+    width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: "IBM Plex Mono", monospace; font-weight: 500; font-size: .95rem;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  ol.plan li h3 { margin: 0; font-size: 1.1rem; }
+  ol.plan li p { margin: 4px 0 0; }
+
+  .callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 18px 0; }
+  .callout p { margin: 0; color: var(--ink); }
+
+  .decisions { display: grid; gap: 12px; margin-top: 16px; }
+  .decision { border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; background: var(--surface); }
+  .decision h3 { margin: 0; font-size: 1.05rem; }
+  .decision p { margin: 6px 0 0; }
+  .decision .rec { font-size: .85rem; color: var(--accent); font-weight: 600; margin-top: 8px; }
+
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    h1 { font-size: 2.1rem; }
+    main { padding: 32px 16px 72px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  /* Added when the plan below was built, so the page says what exists
+     rather than what was proposed. */
+  .built {
+    display: inline-block;
+    margin-left: .5rem;
+    padding: .1rem .5rem;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    background: var(--ok-soft, #dcfce7);
+    color: var(--ok-ink, #166534);
+  }
+  .shipped-note {
+    margin: 1rem 0 0;
+    padding: .85rem 1rem;
+    border-left: 3px solid var(--ok-ink, #166534);
+    background: var(--ok-soft, #dcfce7);
+    border-radius: 0 .5rem .5rem 0;
+    font-size: .9rem;
+  }
+  .shipped-note strong { font-weight: 700; }
+</style>
+
+</head>
+<body>
+<main>
+  <p class="eyebrow">Stars High School · Fees module · audit</p>
+  <h1>Fee Ledger Audit</h1>
+  <p class="lede">The fee system is honest about one bill at a time and silent about the student. It has no idea what a family owes, only what each challan owes — and that single gap is behind every question you asked.</p>
+  <div class="meta">
+    <span>As of <b>20 October 2026</b></span>
+    <span>Read from <b>schema, triggers, 580 lines of actions, 7 screens</b></span>
+    <span>Live data <b>1 challan · 1 payment · 1 policy · 3 students</b></span>
+  </div>
+
+  <div class="prose">
+    <h2>How it works today</h2>
+    <p>Three tables carry the money. A <strong>fee policy</strong> says what a class owes in which months — tuition, admission, exam, transport, other, each with its own month list. A <strong>challan</strong> is one bill: one student, one month, one fee type, and a unique index enforces exactly that. A <strong>payment</strong> is money against exactly one challan.</p>
+    <p>Two triggers do the arithmetic. On every challan, <code>net = amount + late_fee − discount</code>. On every payment, the challan's <code>paid_amount</code> is re-summed and its status set: <em>paid</em> if covered, <em>partial</em> if some, <em>overdue</em> if past due, else <em>open</em>. Nothing in the app writes those two columns by hand, which is the right design.</p>
+    <p>What does not exist, anywhere: an account. No running balance, no credit, no "brought forward". Every number on every screen is a sum over challans computed at render time — the student page adds up <code>billed − collected</code>, the reports call <code>fee_totals()</code>, which does the same thing over the whole school. The screen called <strong>Student Ledger</strong> is a list of challans beside a list of payments with three totals above them. It is a derivation, not a ledger.</p>
+    <p>Two things are in the schema and used by nothing. <code>fee_items</code> and <code>fee_challan_items</code> — a price list and line items per challan — appear only in the backup route. And the student record carries <code>fee_plan</code> (monthly / quarterly / annual) and <code>starting_month</code>, but the monthly generator bills every active student every policy month regardless. A quarterly student is billed monthly.</p>
+  </div>
+
+  <h2>Your questions, against the code</h2>
+  <div class="qa">
+    <div class="q">
+      <h3>Half payments and splits <span class="chip works">Works</span></h3>
+      <p>Pay part of a challan and it becomes <em>partial</em>; pay the rest later and it becomes <em>paid</em>. Each payment gets its own receipt, <code>RC-2026-0001</code> onward. Any number of instalments against one challan is fine.</p>
+      <p class="ref">recordPayment · recalc_challan_paid() trigger</p>
+    </div>
+    <div class="q">
+      <h3>Advances <span class="chip missing">Missing</span></h3>
+      <p>There is no place for money that is not against a challan. <code>recordPayment</code> actively refuses an amount above the challan's outstanding — <em>"That is more than the Rs 4,500 still outstanding"</em> — so a parent who hands over Rs 10,000 against a Rs 4,500 bill cannot be recorded at all. No credit column, no wallet, no carry-forward. A grep for <em>advance, credit, arrears, carry forward</em> across the fee module returns nothing.</p>
+      <p class="ref">recordPayment lines 470–476 · no table or column holds a balance</p>
+    </div>
+    <div class="q">
+      <h3>Remainings <span class="chip partly">Partly</span></h3>
+      <p>Per challan: correct, <code>net − paid</code>. Per student: a sum over that student's challans, recomputed on each page load, shown as "due" on the student page. It is right, but it is not stored, not dated, and not printed anywhere a parent sees it. A new month's challan carries no line for what was already owed.</p>
+      <p class="ref">remaining() in fee-options · student/page.js lines 115–120</p>
+    </div>
+    <div class="q">
+      <h3>A student ledger <span class="chip partly">Partly</span></h3>
+      <p>The screen exists; the record does not. You cannot ask "what was this family's balance on 1 August" — only "what do their challans add up to now". A ledger is an append-only list of dated entries with a running balance. This has the entries scattered across two tables and no balance at all.</p>
+      <p class="ref">student/page.js · fee_totals()</p>
+    </div>
+    <div class="q">
+      <h3>Five months unpaid — how the voucher looks <span class="chip missing">Missing</span></h3>
+      <p>He has five separate challans, each overdue, each with its own late fee recomputed per day past a 10-day grace. There is <strong>no voucher</strong>. Nothing in the fee module prints — the only match for the word is a placeholder in a form. Total owed is visible on the Student Ledger screen as one figure, and nowhere else.</p>
+      <p class="ref">applyLateFees · grep for voucher/print returns one placeholder string</p>
+    </div>
+    <div class="q">
+      <h3>Five months advance on one challan <span class="chip missing">Missing</span></h3>
+      <p>Not representable. A challan has one <code>period_month</code> and the unique index allows one per month per type. The only route is five separate challans raised ahead — the monthly batch will happily generate a future month — paid separately with five receipts. Nothing is auto-generated: generation is a button, pressed by a person, for a month they choose.</p>
+      <p class="ref">fee_challans_one_per_period · generateMonthlyBatch</p>
+    </div>
+    <div class="q">
+      <h3>Pendings plus advance in one visit <span class="chip missing">Missing</span></h3>
+      <p>One payment settles one challan. A parent clearing five arrears and paying two months ahead is seven payments, seven receipts, and the advance part is refused outright. This is the question the rest of the report is really about.</p>
+      <p class="ref">fee_payments.challan_id is the whole model</p>
+    </div>
+  </div>
+
+  <div class="prose">
+    <h2>What is missing</h2>
+    <p>Every gap is the same gap seen from a different side: the system has bills but no account. Fix the account and the rest follows.</p>
+  </div>
+  <div class="scroll">
+    <table class="gap">
+      <thead><tr><th>Missing</th><th>Why it matters</th><th>Where it bites today</th></tr></thead>
+      <tbody>
+        <tr><td>Student account with a running balance</td><td>"What does this family owe" is the question a school asks fifty times a day. It should be a stored fact, not a sum rebuilt on every screen.</td><td>Student Ledger, Collect, Reports all recompute it differently</td></tr>
+        <tr><td>Credit / advance balance</td><td>Parents pay ahead before travel, before Ramadan, at year end. Refusing the money is not an option.</td><td><code>recordPayment</code> rejects any overpayment</td></tr>
+        <tr><td>Multi-month challans</td><td>One voucher for Nov–Mar, one trip to the bank, one receipt.</td><td>One <code>period_month</code> per challan, enforced by index</td></tr>
+        <tr><td>Arrears on the voucher</td><td>A November bill that says <em>Previous balance Rs 24,025</em> gets paid. One that says Rs 4,500 does not.</td><td>No previous-balance line exists; no voucher exists</td></tr>
+        <tr><td>One payment, many challans</td><td>The cashier takes one amount and the system splits it. Today the cashier splits it.</td><td><code>fee_payments.challan_id</code>, singular</td></tr>
+        <tr><td>Printable voucher</td><td>The three-copy bank challan is the document the whole process runs on.</td><td>Nothing in fees prints</td></tr>
+        <tr><td><code>fee_plan</code> honoured</td><td>Quarterly and annual students exist on the form and are billed monthly anyway.</td><td><code>generateMonthlyBatch</code> never reads it</td></tr>
+        <tr><td>Scheduled generation</td><td>Challans should exist on the 1st without anyone remembering to press a button.</td><td>Monthly Batch is a manual action</td></tr>
+        <tr><td>Late fee policy for arrears</td><td>Five overdue months is five separate per-day fines, compounding to Rs 1,525 by 20 Oct in the example below. That may be intended; it should be a choice.</td><td><code>applyLateFees</code>, per challan</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="prose">
+    <h2>The design that fixes it</h2>
+    <p>Add one table and change the meaning of two. Keep every existing screen working during the change — the live data is one challan and one payment, so there is nothing to migrate, only a shape to settle.</p>
+
+    <h3>1 · The ledger is the truth</h3>
+    <p><code>fee_ledger</code>: one row per thing that happened to a student's money — a charge when a challan is issued, a payment when cash arrives, a late fee, a discount, an advance, an adjustment. Signed amounts, dated, pointing back to the challan or payment that caused them. Balance is the sum; a trigger keeps <code>students.fee_balance</code> current so it is one column read, not a query. Positive means owed, negative means in credit.</p>
+  </div>
+
+  <div class="sheet">
+    <div class="sheet-head">
+      <span class="title">Ahmed Raza · Class 5-B · Account</span>
+      <span class="sub">Tuition Rs 4,500/month · late fee Rs 5/day after 10 days · as it would read on 20 Oct 2026</span>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Date</th><th>Entry</th><th>Ref</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+        <tbody>
+          <tr><td>01 Jun</td><td>Tuition · June</td><td class="mono">CH-2026-0017</td><td class="num dr">4,500</td><td class="num"></td><td class="num">4,500</td></tr>
+          <tr><td>01 Jul</td><td>Tuition · July</td><td class="mono">CH-2026-0031</td><td class="num dr">4,500</td><td class="num"></td><td class="num">9,000</td></tr>
+          <tr><td>01 Aug</td><td>Tuition · August</td><td class="mono">CH-2026-0045</td><td class="num dr">4,500</td><td class="num"></td><td class="num">13,500</td></tr>
+          <tr><td>01 Sep</td><td>Tuition · September</td><td class="mono">CH-2026-0059</td><td class="num dr">4,500</td><td class="num"></td><td class="num">18,000</td></tr>
+          <tr><td>01 Oct</td><td>Tuition · October</td><td class="mono">CH-2026-0073</td><td class="num dr">4,500</td><td class="num"></td><td class="num">22,500</td></tr>
+          <tr><td>20 Oct</td><td>Late fees · Jun 122d, Jul 92d, Aug 61d, Sep 30d</td><td class="mono">—</td><td class="num dr">1,525</td><td class="num"></td><td class="num">24,025</td></tr>
+          <tr><td>20 Oct</td><td>Payment · cash</td><td class="mono">RC-2026-0088</td><td class="num"></td><td class="num cr">30,000</td><td class="num cr">−5,975</td></tr>
+          <tr><td>01 Nov</td><td>Tuition · November <em>(settled from credit on issue)</em></td><td class="mono">CH-2026-0091</td><td class="num dr">4,500</td><td class="num"></td><td class="num cr">−1,475</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="prose">
+    <p>That one sheet answers every question above. Five unpaid months are five debit lines and a balance; the Rs 30,000 clears them and leaves Rs 5,975 in credit; November's challan is issued and immediately absorbed. The parent never saw a refused payment and the cashier never did arithmetic.</p>
+
+    <h3>2 · A challan is a header with lines</h3>
+    <p>Keep <code>fee_challans</code> as the voucher — the number, the due date, the student, the totals — and give it <code>period_from</code> / <code>period_to</code>. Put the months in <code>fee_challan_items</code>, the table that already exists: one line per month per component. Move the one-per-month rule from the header to the lines: a <em>line</em> for Ahmed · November · tuition may exist once. Then a five-month advance voucher is five lines on one challan, and when the monthly batch runs in December it finds December already billed and skips him. Nothing duplicates.</p>
+    <p>Three more header columns make the voucher honest: <code>previous_balance</code> (the account balance at issue), <code>credit_applied</code> (what was absorbed from credit), and <code>payable</code> — what the parent actually takes to the bank.</p>
+  </div>
+
+  <div class="voucher">
+    <div class="v-head">
+      <span class="school">Stars High School</span>
+      <span class="copy">Bank copy</span>
+    </div>
+    <div class="v-body">
+      <table>
+        <tbody>
+          <tr><td>Challan</td><td class="num mono">CH-2026-0091</td><td>Due</td><td class="num mono">10 Nov 2026</td></tr>
+          <tr><td>Student</td><td colspan="3">Ahmed Raza · 5-B · Adm. 2024-0412</td></tr>
+          <tr><td colspan="4" style="padding-top:10px;border-bottom:1px solid var(--rule-strong)"></td></tr>
+          <tr><td colspan="3">Tuition · Nov 2026 – Mar 2027 · 5 months</td><td class="num">22,500</td></tr>
+          <tr><td colspan="3">Exam fee · Dec 2026</td><td class="num">1,200</td></tr>
+          <tr><td colspan="3">Previous balance brought forward</td><td class="num dr">0</td></tr>
+          <tr><td colspan="3">Credit applied</td><td class="num cr">−5,975</td></tr>
+          <tr class="total"><td colspan="3">Payable</td><td class="num">Rs 17,725</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="v-foot">
+      <span>Pay at any branch · quote the challan number</span>
+      <span class="stamp">School copy · Student copy</span>
+    </div>
+  </div>
+
+  <div class="prose">
+    <p>Three copies — bank, school, student — is the convention every Pakistani parent recognises, and it is what the print view should produce: the same voucher three times down an A4 sheet with cut lines, not a web page screenshot.</p>
+
+    <h3>3 · A payment is against the account, allocated to challans</h3>
+    <p>Make <code>fee_payments.challan_id</code> optional and add <code>fee_payment_allocations</code>: payment, challan, amount. The cashier picks a <em>student</em>, sees every open challan and the current credit, types the total handed over. The system allocates oldest-first — June before July — shows the split, and lets the cashier override it. Whatever is left over becomes a credit entry in the ledger. One receipt, listing what it cleared and what it put on account.</p>
+    <p>The existing recalc trigger survives almost unchanged: it sums allocations instead of payments, so partial and paid still set themselves.</p>
+
+    <h3>4 · Generation that knows the student</h3>
+    <p>Move <code>generateMonthlyBatch</code> into a SQL function. For each student it reads <code>fee_plan</code>: monthly students get a one-line challan, quarterly students get three lines on one voucher every third month from <code>starting_month</code>, annual students one voucher a year. It writes the <code>previous_balance</code> from the ledger, applies credit, computes <code>payable</code>, and writes the ledger entries in the same transaction. Being SQL, a scheduled job can call it on the 1st with no button and no person.</p>
+  </div>
+
+  <h2>Build plan</h2>
+  <div class="prose"><p>In this order, because each step leaves every screen working. Sizes are honest for a module with one live challan.</p></div>
+
+  <p class="shipped-note">
+    <strong>All of it is built.</strong> The migrations are
+    <code>031_fee_ledger.sql</code>, <code>038_fee_vouchers.sql</code> and
+    <code>039_fee_schedule.sql</code> — renumbered from 029–031 to sit after the
+    other work that landed the same day. Each was dry-run against the live
+    database with <code>npm run db:dry-run</code>, together with a probe that
+    raises a five-month voucher, refuses to bill those months twice, takes one
+    payment across every open bill, and checks the leftover becomes credit that
+    settles the next voucher by itself. <strong>Nothing is applied yet:</strong>
+    run the three files in the Supabase SQL editor, in that order.
+  </p>
+  <ol class="plan">
+    <li>
+      <h3>Migration 029 — the ledger<span class="built">built · 031_fee_ledger.sql</span></h3>
+      <p><code>fee_ledger</code> table, <code>students.fee_balance</code>, trigger that maintains it, and a backfill that writes a charge entry for the one existing challan and a payment entry for the one existing payment. Dry-run it with <code>npm run db:dry-run</code> like the others. <em>Half a day.</em></p>
+    </li>
+    <li>
+      <h3>Migration 030 — challan lines and allocations<span class="built">built · 038_fee_vouchers.sql</span></h3>
+      <p><code>period_from</code>/<code>period_to</code>/<code>previous_balance</code>/<code>credit_applied</code>/<code>payable</code> on the header; unique index moved to <code>fee_challan_items</code>; <code>fee_payment_allocations</code>; recalc trigger rewritten to sum allocations. The existing challan becomes a one-line challan with one allocation. <em>Half a day.</em></p>
+    </li>
+    <li>
+      <h3>Collect Fee, rewritten around the student<span class="built">built</span></h3>
+      <p>Search a student, see balance and open challans, enter the amount, review the oldest-first split, override if needed, save. Excess shows as "to account" before you press the button so nobody is surprised. One receipt. <em>One day.</em></p>
+    </li>
+    <li>
+      <h3>Generation in SQL, honouring fee_plan<span class="built">built</span></h3>
+      <p><code>generate_fee_challans(school, year, month)</code>: multi-month lines for quarterly and annual, previous balance and credit on every voucher, ledger entries written alongside. The Monthly Batch button calls it; so can a scheduled job. <em>One day.</em></p>
+    </li>
+    <li>
+      <h3>The voucher<span class="built">built</span></h3>
+      <p><code>/school/fees/challans/[id]/print</code>: three copies on A4, lines, previous balance, credit, payable, the bank's details from Settings. Print from the challan list and from the student page. <em>Half a day.</em></p>
+    </li>
+    <li>
+      <h3>Student Ledger, now actually a ledger<span class="built">built</span></h3>
+      <p>The dated Dr/Cr/Balance sheet shown above, with every entry linking to its challan or receipt, and an "as of" date picker that answers the August question. <em>Half a day.</em></p>
+    </li>
+    <li>
+      <h3>Schedule it<span class="built">built · off by default</span></h3>
+      <p>A monthly job — Supabase <code>pg_cron</code> or a Vercel cron hitting a route — that calls the generator on the day Settings names, and the late-fee pass on the day after the grace period ends. <em>A couple of hours, once the generator is SQL.</em></p>
+    </li>
+  </ol>
+
+  <div class="callout prose">
+    <p>Total: roughly four working days, and the first two steps are safe to run before any screen changes — they add, they do not replace.</p>
+  </div>
+
+  <p class="shipped-note"><strong>Settled:</strong> an explicit <strong>Bill Ahead</strong> button on the student's ledger, as
+    recommended, available to anyone holding fees edit — the same permission as
+    raising any other challan. The monthly run then skips those months on its
+    own, because the rule lives in a unique index on the challan lines rather
+    than in either screen.</p>
+
+  <h2>What was built, screen by screen</h2>
+  <div class="prose">
+    <p>
+      <strong>Collect Fee</strong> now starts from the student. Pick a family and
+      the panel lists every bill they have open — not only the month on screen,
+      because arrears are the point — alongside their balance and any advance
+      they hold. One amount is typed; the split across bills is shown before
+      anything is saved, oldest first, with any surplus named as advance. The
+      cashier can override the split per bill. One payment, one receipt, however
+      many months it settles.
+    </p>
+    <p>
+      <strong>Bill Ahead</strong> sits on the student's ledger: choose a starting
+      month and a number of months, and one voucher is raised covering them all,
+      with one line per month off the class fee policy. Months already billed are
+      left out, so the monthly run and an advance voucher cannot bill the same
+      month twice — that rule is a unique index, not a check in the app.
+    </p>
+    <p>
+      <strong>The voucher</strong> prints three copies to an A4 sheet as before,
+      but now lists its months as separate lines and shows what the family was
+      carrying when it was raised, any advance spent against it, and the figure
+      actually payable. <strong>The receipt</strong> lists every bill the payment
+      cleared, and the balance printed on it is read off the ledger as at that
+      receipt — so a reprint never contradicts the copy the parent kept.
+    </p>
+    <p>
+      <strong>Student Ledger</strong> is a statement: every charge and payment in
+      the order it happened, with the running balance after each and an "as at"
+      date for answering what was owed in March. A negative balance is shown as
+      credit, not as a debt.
+    </p>
+    <p>
+      <strong>Late fees</strong> can now be charged per day past the grace period
+      or as a flat amount per month overdue, and either can be capped per
+      challan. On a five-month arrear an uncapped daily fine comes to more than
+      the fee itself, which is why the cap exists.
+    </p>
+    <p>
+      <strong>The monthly run</strong> can go unattended. Point any scheduler at
+      <code>POST /api/cron/fees</code> once a day with the token in an
+      <code>Authorization: Bearer</code> header; each school names its own
+      billing day and due day in Settings → Fee &amp; Finance, and the database
+      decides whether today is that day. Mint the token by calling
+      <code>rotate_fee_cron_token()</code> as a platform admin — it is returned
+      once and only its hash is stored. Re-running a day that already ran raises
+      nothing, so retries are safe. <strong>It ships switched off:</strong> the
+      thing being automated writes bills for every family in the school, and a
+      school that has not yet set its billing day and its fee policies would
+      find out from parents.
+    </p>
+  </div>
+
+  <h2>Decisions you need to make first</h2>
+  <div class="prose"><p>Four choices the code cannot make for you. Each has a recommendation; none is blocking the first two migrations.</p></div>
+  <div class="decisions">
+    <div class="decision">
+      <p class="shipped-note">
+    These four were live questions when this was written. Three are now settled
+    in code, and the fourth is a setting. Each note below says what was chosen
+    and where to change it.
+  </p>
+
+  <h3>Late fees on arrears: per month, or once?</h3>
+      <p>Today five overdue months earn five separate per-day fines — Rs 1,525 in the example, growing daily. Most schools charge a flat late fee per missed month, or one fine on the account, not a per-day meter on each. Per-day across five challans is unusually steep and will generate complaints.</p>
+      <p class="rec">Recommend: flat amount per overdue month, capped, set in Settings → Fee &amp; Finance.</p>
+    </div>
+    <div class="decision">
+      <p class="shipped-note"><strong>Settled:</strong> the recommendation was taken, and both modes exist. Settings → Fee &amp; Finance
+    now offers <em>so much per day late</em> or <em>a flat amount per month late</em>,
+    with a maximum fine per challan that applies to either. Nothing is charged
+    until somebody runs the late-fee pass from the collection screen, and the
+    fine is recomputed from the due date on each run rather than added to, so
+    running it twice in a day does not double it.</p>
+  <h3>Credit: absorbed automatically, or on request?</h3>
+      <p>Automatic means November's voucher already shows credit applied and the parent pays less. On request means the credit sits until the cashier applies it. Automatic is what a parent expects when they paid ahead.</p>
+      <p class="rec">Recommend: automatic at issue, visible as a line on the voucher.</p>
+    </div>
+    <div class="decision">
+      <p class="shipped-note"><strong>Settled:</strong> automatic, as recommended. <code>raise_fee_voucher()</code> calls
+    <code>apply_credit()</code> as its last step, so a family in credit gets a
+    voucher that already shows <em>less: advance applied</em> and a reduced
+    figure to pay. The advance is spent oldest payment first, and the Collect Fee
+    panel also stops suggesting money a family does not owe — it suggests the
+    bills less the credit, so nobody is charged twice for the same month.</p>
+  <h3>Arrears: on the current voucher, or a separate one?</h3>
+      <p>One voucher with a "previous balance" line is what gets paid. A separate arrears voucher is cleaner for accounting but gets ignored at the bank counter.</p>
+      <p class="rec">Recommend: one voucher, previous balance as its own line, arrears paid first by allocation.</p>
+    </div>
+    <div class="decision">
+      <p class="shipped-note"><strong>Settled:</strong> one voucher, as recommended. Every challan stores the balance the family
+    was carrying the moment it was raised, in <code>previous_balance</code>, and
+    prints it as <em>arrears brought forward</em> above the total. The figure is
+    stamped at issue time rather than computed at print time, so a voucher
+    reprinted in December still shows what December's voucher showed. Payments
+    then clear the oldest bill first, which is the other half of "arrears paid
+    first".</p>
+  <h3>Advance vouchers: who may raise them?</h3>
+      <p>A five-month voucher is a request, not a schedule. Raising one should be a deliberate act on the student's page — "Bill ahead · Nov to Mar" — with the ordinary batch then skipping those months automatically.</p>
+      <p class="rec">Recommend: an explicit action on the student page, available to anyone with fees edit.</p>
+    </div>
+  </div>
+</main>
+</body>
+</html>

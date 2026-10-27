@@ -1,0 +1,5 @@
+node_modules/
+.env
+# The linked-device credentials. These ARE the WhatsApp session -- anyone
+# holding this folder can send as the school.
+auth/

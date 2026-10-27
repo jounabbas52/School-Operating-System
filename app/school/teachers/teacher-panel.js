@@ -63,6 +63,8 @@ export default function TeacherPanel({
   nextStaffNumber,
   schoolId,
   photoUrl,
+  signatureUrl,
+  stampUrl,
   trigger,
 }) {
   const [open, setOpen] = useState(false)
@@ -346,6 +348,33 @@ export default function TeacherPanel({
                 hint="Stored privately — never served by public link."
                 defaultPath={row?.photo_url ?? ''}
                 defaultPreview={photoUrl ?? null}
+              />
+
+              {/* A teacher signs a date sheet, a result card and a leaving
+                  certificate, and a class teacher's stamp goes on a report
+                  card -- so these belong to the person, not to the school.
+                  Same private bucket as the photograph on purpose: writing
+                  to school-assets needs core.settings.write, which somebody
+                  maintaining staff records has no reason to hold. */}
+              <ImageUpload
+                name="signature_url"
+                bucket={STAFF_PHOTOS}
+                folder={schoolId}
+                isPublic={false}
+                label="Signature"
+                hint="Transparent PNG — signed on white paper and cut out."
+                defaultPath={row?.signature_url ?? ''}
+                defaultPreview={signatureUrl ?? null}
+              />
+              <ImageUpload
+                name="stamp_url"
+                bucket={STAFF_PHOTOS}
+                folder={schoolId}
+                isPublic={false}
+                label="Personal stamp"
+                hint="Optional — the rubber stamp, not the signature."
+                defaultPath={row?.stamp_url ?? ''}
+                defaultPreview={stampUrl ?? null}
               />
             </div>
           </section>

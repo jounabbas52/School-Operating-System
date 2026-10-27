@@ -1,33 +1,36 @@
 'use client'
 
-import IdCard from './id-card'
+import IdCard from '@/components/print/id-card'
+import { PaperRule, PrintButton as PrintNow } from '@/components/print/print-now'
 
 // The grid and the print button both live here so the button can call
 // window.print() without the page itself becoming a client component. They
 // are separate named exports: a static property hung off the default export
 // does not survive the server/client boundary.
+//
+// The grid is sized in card widths rather than a column count. At CR80 an A4
+// takes two across and five down whatever the window is doing, and a
+// responsive 2/3/4-column grid meant the printed sheet changed depending on
+// how wide the browser happened to be when somebody pressed Print.
 export default function CardGrid({ cards, settings }) {
   return (
-    <div className="print-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {cards.map((card) => (
-        <div key={card.id} className="flex justify-center">
-          <IdCard student={card} settings={settings} />
-        </div>
-      ))}
-    </div>
+    <>
+      <PaperRule paper="a4" />
+      <div className="doc-card-grid">
+        {cards.map((card) => (
+          <IdCard key={card.id} student={card} settings={settings} />
+        ))}
+      </div>
+    </>
   )
 }
 
 export function PrintButton({ count }) {
   return (
-    <button
-      type="button"
+    <PrintNow
+      label="Print all"
       disabled={count === 0}
-      onClick={() => window.print()}
-      className="btn btn-primary"
       title={count ? `Print ${count} card${count === 1 ? '' : 's'}` : 'Nothing to print'}
-    >
-      Print all
-    </button>
+    />
   )
 }
